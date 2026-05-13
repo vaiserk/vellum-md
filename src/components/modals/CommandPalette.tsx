@@ -69,7 +69,7 @@ export function CommandPalette() {
           const files = await window.electron.fs.readDir(vaultPath);
           setFiles(files);
         } else {
-          alert('Nenhuma nota encontrada na lixeira.');
+          useVaultStore.getState().openConfirm('Nenhuma nota encontrada na lixeira.');
         }
         close();
       }

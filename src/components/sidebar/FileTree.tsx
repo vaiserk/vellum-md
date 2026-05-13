@@ -43,6 +43,9 @@ export function FileTree() {
         const { vaultPath, setFiles, files } = useVaultStore.getState();
         
         if (vaultPath) {
+          // Get the new file structure FIRST
+          const updatedFiles = await window.electron.fs.readDir(vaultPath);
+
           // Update links in all files
           const updateLinksInFolder = async (nodes: FileNode[]) => {
             for (const node of nodes) {
@@ -57,9 +60,8 @@ export function FileTree() {
               }
             }
           };
-          await updateLinksInFolder(files);
+          await updateLinksInFolder(updatedFiles);
 
-          const updatedFiles = await window.electron.fs.readDir(vaultPath);
           setFiles(updatedFiles);
           if (activeFile === file.path) {
             setActiveFile(newPath, useVaultStore.getState().activeContent);

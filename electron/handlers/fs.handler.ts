@@ -16,7 +16,7 @@ export function setupFsHandlers(ipcMain: Electron.IpcMain, dialog: Electron.Dial
         let results: any[] = [];
         const list = fs.readdirSync(dir);
         list.forEach(file => {
-          if (file.startsWith('.') && file !== '.vellum') return;
+          if (file.startsWith('.')) return;
           const filePath = path.join(dir, file);
           const stat = fs.statSync(filePath);
           if (stat && stat.isDirectory()) {

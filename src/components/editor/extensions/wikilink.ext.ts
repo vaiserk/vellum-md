@@ -35,12 +35,13 @@ export const wikilinkHighlighter = ViewPlugin.fromClass(
   {
     decorations: (v) => v.decorations,
     eventHandlers: {
-      click(event: MouseEvent, view: EditorView) {
+      mousedown(event: MouseEvent, view: EditorView) {
         const target = event.target as HTMLElement;
-        if (event.ctrlKey && target.classList.contains('cm-wikilink')) {
-          const noteName = target.getAttribute('data-wikilink');
+        const wikilink = target.closest('.cm-wikilink');
+        if (event.ctrlKey && wikilink) {
+          event.preventDefault(); // prevent selection change
+          const noteName = wikilink.getAttribute('data-wikilink');
           if (noteName) {
-            // Dispatch custom event so the app can handle navigation
             window.dispatchEvent(new CustomEvent('vellum:open-note', { detail: { name: noteName } }));
           }
         }
