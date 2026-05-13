@@ -24,7 +24,9 @@ export function Sidebar() {
 
   const handleCreateFile = async () => {
     if (!vaultPath) return;
-    const name = `Nova Nota ${Date.now()}.md`;
+    const inputName = window.prompt('Nome da nova nota:', 'Nova Nota');
+    if (!inputName) return; // Cancelado
+    const name = inputName.endsWith('.md') ? inputName : `${inputName}.md`;
     const filePath = vaultPath + '/' + name;
     await window.electron.fs.createFile(filePath);
     const updatedFiles = await window.electron.fs.readDir(vaultPath);

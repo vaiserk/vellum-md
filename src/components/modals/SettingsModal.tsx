@@ -44,6 +44,19 @@ export function SettingsModal() {
             </div>
 
             <div className="settings-row">
+              <label>Tipografia</label>
+              <select 
+                value={settings.fontFamily}
+                onChange={e => settings.setFontFamily(e.target.value)}
+              >
+                <option value="Inter">Inter (Sans-serif)</option>
+                <option value="Lora">Lora (Serif)</option>
+                <option value="JetBrains Mono">JetBrains Mono (Monospace)</option>
+                <option value="Roboto">Roboto</option>
+              </select>
+            </div>
+
+            <div className="settings-row">
               <label>Mostrar números de linha</label>
               <input 
                 type="checkbox" checked={settings.showLineNumbers}

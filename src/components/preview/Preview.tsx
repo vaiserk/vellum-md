@@ -15,6 +15,7 @@ import 'highlight.js/styles/github-dark.css';
 import './preview.css';
 import { useVaultStore } from '../../store/vault.store';
 import mermaid from 'mermaid';
+import { visit } from 'unist-util-visit';
 
 // Initialize mermaid
 mermaid.initialize({
@@ -102,6 +103,87 @@ function CustomImg(props: any) {
   );
 }
 
+// Custom remark plugin for Wikilinks [[Nota]]
+function remarkWikilinks() {
+  return (tree: any) => {
+    visit(tree, 'text', (node: any, index, parent) => {
+      if (!parent || !node.value) return;
+      const regex = /\[\[([^\]]+)\]\]/g;
+      const matches = [...node.value.matchAll(regex)];
+      if (matches.length === 0) return;
+
+      const children = [];
+      let lastIndex = 0;
+
+      for (const match of matches) {
+        if (match.index > lastIndex) {
+          children.push({ type: 'text', value: node.value.slice(lastIndex, match.index) });
+        }
+        children.push({
+          type: 'element',
+          data: {
+            hName: 'span',
+            hProperties: { 
+              className: 'wikilink',
+              onClick: `window.dispatchEvent(new CustomEvent('vellum:open-note', { detail: { name: '${match[1]}' } }))`
+            }
+          },
+          children: [{ type: 'text', value: match[1] }]
+        });
+        lastIndex = match.index + match[0].length;
+      }
+
+      if (lastIndex < node.value.length) {
+        children.push({ type: 'text', value: node.value.slice(lastIndex) });
+      }
+
+      parent.children.splice(index, 1, ...children);
+    });
+  };
+}
+
+// Custom remark plugin for Callouts > [!NOTE]
+function remarkCallouts() {
+  return (tree: any) => {
+    visit(tree, 'blockquote', (node: any) => {
+      if (!node.children || node.children.length === 0) return;
+      
+      const firstParagraph = node.children[0];
+      if (firstParagraph.type !== 'paragraph' || !firstParagraph.children || firstParagraph.children.length === 0) return;
+      
+      const firstTextNode = firstParagraph.children[0];
+      if (firstTextNode.type !== 'text') return;
+      
+      const match = firstTextNode.value.match(/^\[!(NOTE|TIP|WARNING|CAUTION|DANGER|IMPORTANT)\]/i);
+      if (match) {
+        const type = match[1].toLowerCase();
+        firstTextNode.value = firstTextNode.value.substring(match[0].length).trimStart();
+        
+        node.data = node.data || {};
+        node.data.hName = 'div';
+        node.data.hProperties = { className: `callout callout-${type}` };
+        
+        // Add title
+        const icons: any = {
+          note: 'ℹ️', tip: '💡', warning: '⚠️', caution: '🛑', danger: '🛑', important: '⭐'
+        };
+        const titleText = type.charAt(0).toUpperCase() + type.slice(1);
+        
+        node.children.unshift({
+          type: 'element',
+          data: {
+            hName: 'div',
+            hProperties: { className: 'callout-title' }
+          },
+          children: [
+            { type: 'text', value: `${icons[type] || 'ℹ️'} ${titleText}` }
+          ]
+        });
+      }
+    });
+  };
+}
+
 export function Preview() {
   const { activeContent, theme } = useVaultStore();
 
@@ -113,6 +195,8 @@ export function Preview() {
         .use(remarkGfm)
         .use(remarkMath)
         .use(remarkBreaks)
+        .use(remarkCallouts)
+        .use(remarkWikilinks)
         .use(remarkRehype, { allowDangerousHtml: true })
         .use(rehypeKatex)
         .use(rehypeHighlight, { ignoreMissing: true })
@@ -121,6 +205,20 @@ export function Preview() {
           components: {
             pre: CustomPre,
             img: CustomImg,
+            span: (props: any) => {
+              if (props.className === 'wikilink') {
+                return <span {...props} onClick={(e) => {
+                  if (props.onClick) {
+                    // Extract the event dispatch string and execute it safely
+                    const match = props.onClick.match(/name: '([^']+)'/);
+                    if (match) {
+                      window.dispatchEvent(new CustomEvent('vellum:open-note', { detail: { name: match[1] } }));
+                    }
+                  }
+                }}>{props.children}</span>
+              }
+              return <span {...props} />
+            }
           },
         } as any);
 

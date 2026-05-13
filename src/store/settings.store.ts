@@ -45,6 +45,7 @@ interface SettingsState {
 
   // Editor
   fontSize: number;
+  fontFamily: string;
   editorMaxWidth: number;
   showLineNumbers: boolean;
   autoSaveDelay: number;
@@ -63,6 +64,7 @@ interface SettingsState {
   setAiEnabled: (on: boolean) => void;
   setSuggestConnections: (on: boolean) => void;
   setFontSize: (size: number) => void;
+  setFontFamily: (font: string) => void;
   setEditorMaxWidth: (width: number) => void;
   setShowLineNumbers: (show: boolean) => void;
   setAutoSaveDelay: (delay: number) => void;
@@ -84,6 +86,7 @@ export const useSettingsStore = create<SettingsState>()(
       aiEnabled: false,
       suggestConnections: true,
       fontSize: 16,
+      fontFamily: 'Inter',
       editorMaxWidth: 900,
       showLineNumbers: true,
       autoSaveDelay: 800,
@@ -100,6 +103,7 @@ export const useSettingsStore = create<SettingsState>()(
       setAiEnabled: (on) => set({ aiEnabled: on }),
       setSuggestConnections: (on) => set({ suggestConnections: on }),
       setFontSize: (size) => set({ fontSize: size }),
+      setFontFamily: (font) => set({ fontFamily: font }),
       setEditorMaxWidth: (width) => set({ editorMaxWidth: width }),
       setShowLineNumbers: (show) => set({ showLineNumbers: show }),
       setAutoSaveDelay: (delay) => set({ autoSaveDelay: delay }),
@@ -119,6 +123,7 @@ export const useSettingsStore = create<SettingsState>()(
         aiEnabled: state.aiEnabled,
         suggestConnections: state.suggestConnections,
         fontSize: state.fontSize,
+        fontFamily: state.fontFamily,
         editorMaxWidth: state.editorMaxWidth,
         showLineNumbers: state.showLineNumbers,
         autoSaveDelay: state.autoSaveDelay,

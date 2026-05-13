@@ -27,11 +27,33 @@ export function CommandPalette() {
       shortcut: 'Ctrl+N',
       action: async () => {
         if (!vaultPath) return;
-        const name = `Nova Nota ${Date.now()}.md`;
+        const inputName = window.prompt('Nome da nova nota:', 'Nova Nota');
+        if (!inputName) { close(); return; }
+        const name = inputName.endsWith('.md') ? inputName : `${inputName}.md`;
         const filePath = vaultPath + '/' + name;
         await window.electron.fs.createFile(filePath);
         const files = await window.electron.fs.readDir(vaultPath);
         setFiles(files);
+        close();
+      }
+    },
+    {
+      id: 'save-note',
+      label: 'Salvar Manualmente',
+      category: 'Arquivo',
+      shortcut: 'Ctrl+S',
+      action: () => {
+        // Auto-save handles most, but this is for visibility
+        close();
+      }
+    },
+    {
+      id: 'export-note',
+      label: 'Exportar...',
+      category: 'Arquivo',
+      shortcut: 'Ctrl+Shift+E',
+      action: () => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, shiftKey: true, key: 'E' }));
         close();
       }
     },
@@ -42,6 +64,30 @@ export function CommandPalette() {
       category: 'Editor',
       shortcut: 'Ctrl+\\',
       action: () => { cycleLayoutMode(); close(); }
+    },
+    {
+      id: 'toggle-typewriter',
+      label: 'Alternar Typewriter Mode (Foco)',
+      category: 'Editor',
+      shortcut: 'Ctrl+Shift+T',
+      action: () => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, shiftKey: true, key: 'T' }));
+        close();
+      }
+    },
+    {
+      id: 'bold-text',
+      label: 'Negrito',
+      category: 'Editor',
+      shortcut: 'Ctrl+B',
+      action: () => { close(); }
+    },
+    {
+      id: 'italic-text',
+      label: 'Itálico',
+      category: 'Editor',
+      shortcut: 'Ctrl+I',
+      action: () => { close(); }
     },
     {
       id: 'insert-latex',
@@ -92,7 +138,27 @@ export function CommandPalette() {
         close();
       }
     },
-    // Configurações
+    // Configurações e Ferramentas
+    {
+      id: 'toggle-ai',
+      label: 'Assistente IA',
+      category: 'Ferramentas',
+      shortcut: 'Ctrl+Shift+A',
+      action: () => {
+        useVaultStore.getState().setAiPanelOpen(!useVaultStore.getState().aiPanelOpen);
+        close();
+      }
+    },
+    {
+      id: 'open-settings',
+      label: 'Configurações',
+      category: 'Configurações',
+      shortcut: 'Ctrl+,',
+      action: () => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, key: ',' }));
+        close();
+      }
+    },
     {
       id: 'toggle-theme',
       label: `Mudar Tema (atual: ${theme})`,

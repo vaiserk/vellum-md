@@ -14,7 +14,7 @@ import { useSettingsStore } from './store/settings.store';
 
 function App() {
   const { vaultPath, theme, layoutMode, commandPaletteOpen, setCommandPaletteOpen, aiPanelOpen, setAiPanelOpen } = useVaultStore();
-  const { settingsOpen, setSettingsOpen } = useSettingsStore();
+  const { settingsOpen, setSettingsOpen, fontSize, fontFamily, editorMaxWidth } = useSettingsStore();
   const [exportOpen, setExportOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => {
     // Resetar para mostrar o wizard novamente
@@ -24,7 +24,10 @@ function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
+    document.documentElement.style.setProperty('--font-family', fontFamily === 'Inter' ? '"Inter", sans-serif' : fontFamily === 'Lora' ? '"Lora", serif' : fontFamily === 'JetBrains Mono' ? '"JetBrains Mono", monospace' : '"Roboto", sans-serif');
+    document.documentElement.style.setProperty('--font-size', `${fontSize}px`);
+    document.documentElement.style.setProperty('--editor-max-width', `${editorMaxWidth}px`);
+  }, [theme, fontFamily, fontSize, editorMaxWidth]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -41,13 +44,16 @@ function App() {
         e.preventDefault();
         const state = useVaultStore.getState();
         if (state.vaultPath) {
-          const name = `Nova Nota ${Date.now()}.md`;
-          const filePath = state.vaultPath + '/' + name;
-          window.electron.fs.createFile(filePath).then(() => {
-            window.electron.fs.readDir(state.vaultPath!).then(files => {
-              state.setFiles(files);
+          const inputName = window.prompt('Nome da nova nota:', 'Nova Nota');
+          if (inputName) {
+            const name = inputName.endsWith('.md') ? inputName : `${inputName}.md`;
+            const filePath = state.vaultPath + '/' + name;
+            window.electron.fs.createFile(filePath).then(() => {
+              window.electron.fs.readDir(state.vaultPath!).then(files => {
+                state.setFiles(files);
+              });
             });
-          });
+          }
         }
       }
       if (e.ctrlKey && e.shiftKey && e.key === 'A') {
@@ -69,7 +75,50 @@ function App() {
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+
+    const handleOpenNote = async (e: any) => {
+      const noteName = e.detail?.name;
+      if (noteName) {
+        const state = useVaultStore.getState();
+        const allFiles = state.files;
+        // Search recursively for the note
+        const findFile = (nodes: any[], name: string): any => {
+          for (const node of nodes) {
+            if (node.type === 'file' && (node.name === name || node.name === `${name}.md`)) {
+              return node;
+            }
+            if (node.children) {
+              const found = findFile(node.children, name);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        const file = findFile(allFiles, noteName);
+        if (file) {
+          const content = await window.electron.fs.readFile(file.path);
+          state.setActiveFile(file.path, content);
+        } else {
+          // If not found, maybe create it? (Optional, just alert for now)
+          if (state.vaultPath) {
+             const confirmCreate = window.confirm(`Nota '${noteName}' não encontrada. Deseja criar?`);
+             if (confirmCreate) {
+               const filePath = state.vaultPath + `/${noteName}.md`;
+               await window.electron.fs.createFile(filePath);
+               const newFiles = await window.electron.fs.readDir(state.vaultPath);
+               state.setFiles(newFiles);
+               state.setActiveFile(filePath, ''); // empty frontmatter will be there
+             }
+          }
+        }
+      }
+    };
+    window.addEventListener('vellum:open-note', handleOpenNote);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('vellum:open-note', handleOpenNote);
+    };
   }, [commandPaletteOpen, settingsOpen, exportOpen]);
 
   const handleOnboardingComplete = () => {
