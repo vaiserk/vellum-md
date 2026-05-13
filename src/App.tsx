@@ -9,6 +9,8 @@ import { SettingsModal } from './components/modals/SettingsModal';
 import { ExportModal } from './components/modals/ExportModal';
 import { OnboardingWizard } from './components/modals/OnboardingWizard';
 import { AIPanel } from './components/ai/AIPanel';
+import { PromptModal } from './components/modals/PromptModal';
+import { ConfirmModal } from './components/modals/ConfirmModal';
 import { useVaultStore } from './store/vault.store';
 import { useSettingsStore } from './store/settings.store';
 
@@ -44,16 +46,17 @@ function App() {
         e.preventDefault();
         const state = useVaultStore.getState();
         if (state.vaultPath) {
-          const inputName = window.prompt('Nome da nova nota:', 'Nova Nota');
-          if (inputName) {
-            const name = inputName.endsWith('.md') ? inputName : `${inputName}.md`;
-            const filePath = state.vaultPath + '/' + name;
-            window.electron.fs.createFile(filePath).then(() => {
-              window.electron.fs.readDir(state.vaultPath!).then(files => {
-                state.setFiles(files);
+          state.openPrompt('Nome da nova nota:', 'Nova Nota').then(inputName => {
+            if (inputName) {
+              const name = inputName.endsWith('.md') ? inputName : `${inputName}.md`;
+              const filePath = state.vaultPath + '/' + name;
+              window.electron.fs.createFile(filePath).then(() => {
+                window.electron.fs.readDir(state.vaultPath!).then(files => {
+                  state.setFiles(files);
+                });
               });
-            });
-          }
+            }
+          });
         }
       }
       if (e.ctrlKey && e.shiftKey && e.key === 'A') {
@@ -99,9 +102,9 @@ function App() {
           const content = await window.electron.fs.readFile(file.path);
           state.setActiveFile(file.path, content);
         } else {
-          // If not found, maybe create it? (Optional, just alert for now)
+          // If not found, maybe create it?
           if (state.vaultPath) {
-             const confirmCreate = window.confirm(`Nota '${noteName}' não encontrada. Deseja criar?`);
+             const confirmCreate = await state.openConfirm(`Nota '${noteName}' não encontrada. Deseja criar?`);
              if (confirmCreate) {
                const filePath = state.vaultPath + `/${noteName}.md`;
                await window.electron.fs.createFile(filePath);
@@ -184,6 +187,8 @@ function App() {
       {commandPaletteOpen && <CommandPalette />}
       {settingsOpen && <SettingsModal />}
       {exportOpen && <ExportModal onClose={() => setExportOpen(false)} />}
+      <PromptModal />
+      <ConfirmModal />
     </div>
   );
 }

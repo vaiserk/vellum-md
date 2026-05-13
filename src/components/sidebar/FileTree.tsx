@@ -24,22 +24,46 @@ export function FileTree() {
     if (!contextMenu) return;
     const { file } = contextMenu;
     const oldName = file.name;
-    const newName = window.prompt('Renomear para:', oldName);
+    const baseOldName = oldName.replace('.md', '');
+    
+    // Close context menu first so prompt can open
     setContextMenu(null);
+    
+    const newName = await useVaultStore.getState().openPrompt('Renomear para:', oldName);
     
     if (newName && newName !== oldName) {
       const dir = file.path.substring(0, file.path.lastIndexOf('\\') !== -1 ? file.path.lastIndexOf('\\') : file.path.lastIndexOf('/'));
       const separator = file.path.includes('\\') ? '\\' : '/';
       const newPath = dir + separator + (newName.endsWith('.md') || file.type === 'folder' ? newName : `${newName}.md`);
       
-      await window.electron.fs.renameFile(file.path, newPath);
-      // Refresh files
-      const { vaultPath, setFiles } = useVaultStore.getState();
-      if (vaultPath) {
-        const updatedFiles = await window.electron.fs.readDir(vaultPath);
-        setFiles(updatedFiles);
-        if (activeFile === file.path) {
-          setActiveFile(newPath, useVaultStore.getState().activeContent);
+      const success = await window.electron.fs.renameFile(file.path, newPath);
+      
+      if (success) {
+        const baseNewName = newName.replace('.md', '');
+        const { vaultPath, setFiles, files } = useVaultStore.getState();
+        
+        if (vaultPath) {
+          // Update links in all files
+          const updateLinksInFolder = async (nodes: FileNode[]) => {
+            for (const node of nodes) {
+              if (node.type === 'file') {
+                const content = await window.electron.fs.readFile(node.path);
+                const updatedContent = content.split(`[[${baseOldName}]]`).join(`[[${baseNewName}]]`);
+                if (content !== updatedContent) {
+                  await window.electron.fs.writeFile(node.path, updatedContent);
+                }
+              } else if (node.children) {
+                await updateLinksInFolder(node.children);
+              }
+            }
+          };
+          await updateLinksInFolder(files);
+
+          const updatedFiles = await window.electron.fs.readDir(vaultPath);
+          setFiles(updatedFiles);
+          if (activeFile === file.path) {
+            setActiveFile(newPath, useVaultStore.getState().activeContent);
+          }
         }
       }
     }
@@ -48,8 +72,11 @@ export function FileTree() {
   const handleDelete = async () => {
     if (!contextMenu) return;
     const { file } = contextMenu;
-    const confirm = window.confirm(`Tem certeza que deseja excluir '${file.name}'?`);
+    
+    // Close context menu first so confirm modal can open properly
     setContextMenu(null);
+    
+    const confirm = await useVaultStore.getState().openConfirm(`Tem certeza que deseja excluir '${file.name}'?`);
     
     if (confirm) {
       await window.electron.fs.deleteFile(file.path);

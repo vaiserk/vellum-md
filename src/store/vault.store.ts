@@ -30,6 +30,19 @@ interface VaultState {
   typewriterMode: boolean;
   commandPaletteOpen: boolean;
   aiPanelOpen: boolean;
+  promptModal: {
+    isOpen: boolean;
+    title: string;
+    defaultValue: string;
+    onConfirm: (val: string) => void;
+    onCancel: () => void;
+  } | null;
+  confirmModal: {
+    isOpen: boolean;
+    message: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+  } | null;
   aiMessages: AIMessage[];
   setVaultPath: (path: string | null) => void;
   setFiles: (files: FileNode[]) => void;
@@ -44,6 +57,10 @@ interface VaultState {
   setCommandPaletteOpen: (open: boolean) => void;
   setAiPanelOpen: (open: boolean) => void;
   setAiMessages: (updater: AIMessage[] | ((prev: AIMessage[]) => AIMessage[])) => void;
+  openPrompt: (title: string, defaultValue: string) => Promise<string | null>;
+  closePrompt: () => void;
+  openConfirm: (message: string) => Promise<boolean>;
+  closeConfirm: () => void;
   cycleLayoutMode: () => void;
 }
 
@@ -60,6 +77,8 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   typewriterMode: false,
   commandPaletteOpen: false,
   aiPanelOpen: false,
+  promptModal: null,
+  confirmModal: null,
   aiMessages: [],
   setVaultPath: (path) => set({ vaultPath: path }),
   setFiles: (files) => set({ files }),
@@ -76,6 +95,45 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   setAiMessages: (updater) => set((state) => ({ 
     aiMessages: typeof updater === 'function' ? updater(state.aiMessages) : updater 
   })),
+  openPrompt: (title, defaultValue) => {
+    return new Promise((resolve) => {
+      set({
+        promptModal: {
+          isOpen: true,
+          title,
+          defaultValue,
+          onConfirm: (val) => {
+            resolve(val);
+            set({ promptModal: null });
+          },
+          onCancel: () => {
+            resolve(null);
+            set({ promptModal: null });
+          }
+        }
+      });
+    });
+  },
+  closePrompt: () => set({ promptModal: null }),
+  openConfirm: (message) => {
+    return new Promise((resolve) => {
+      set({
+        confirmModal: {
+          isOpen: true,
+          message,
+          onConfirm: () => {
+            resolve(true);
+            set({ confirmModal: null });
+          },
+          onCancel: () => {
+            resolve(false);
+            set({ confirmModal: null });
+          }
+        }
+      });
+    });
+  },
+  closeConfirm: () => set({ confirmModal: null }),
   cycleLayoutMode: () => {
     const modes: LayoutMode[] = ['split', 'editor-only', 'preview-only'];
     const current = get().layoutMode;

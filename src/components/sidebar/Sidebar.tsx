@@ -24,7 +24,7 @@ export function Sidebar() {
 
   const handleCreateFile = async () => {
     if (!vaultPath) return;
-    const inputName = window.prompt('Nome da nova nota:', 'Nova Nota');
+    const inputName = await useVaultStore.getState().openPrompt('Nome da nova nota:', 'Nova Nota');
     if (!inputName) return; // Cancelado
     const name = inputName.endsWith('.md') ? inputName : `${inputName}.md`;
     const filePath = vaultPath + '/' + name;

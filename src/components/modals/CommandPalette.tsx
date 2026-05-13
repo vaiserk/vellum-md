@@ -27,7 +27,8 @@ export function CommandPalette() {
       shortcut: 'Ctrl+N',
       action: async () => {
         if (!vaultPath) return;
-        const inputName = window.prompt('Nome da nova nota:', 'Nova Nota');
+        const state = useVaultStore.getState();
+        const inputName = await state.openPrompt('Nome da nova nota:', 'Nova Nota');
         if (!inputName) { close(); return; }
         const name = inputName.endsWith('.md') ? inputName : `${inputName}.md`;
         const filePath = vaultPath + '/' + name;
@@ -54,6 +55,22 @@ export function CommandPalette() {
       shortcut: 'Ctrl+Shift+E',
       action: () => {
         window.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, shiftKey: true, key: 'E' }));
+        close();
+      }
+    },
+    {
+      id: 'restore-note',
+      label: 'Restaurar Última Nota Excluída',
+      category: 'Arquivo',
+      action: async () => {
+        if (!vaultPath) return;
+        const success = await (window as any).electron.fs.restoreLastDeleted(vaultPath);
+        if (success) {
+          const files = await window.electron.fs.readDir(vaultPath);
+          setFiles(files);
+        } else {
+          alert('Nenhuma nota encontrada na lixeira.');
+        }
         close();
       }
     },

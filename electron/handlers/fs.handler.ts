@@ -89,4 +89,34 @@ export function setupFsHandlers(ipcMain: Electron.IpcMain, dialog: Electron.Dial
       return false;
     }
   });
+
+  ipcMain.handle('fs:restoreLastDeleted', async (_, vaultPath: string) => {
+    try {
+      const trashDir = path.join(vaultPath, '.vellum', 'trash');
+      if (!fs.existsSync(trashDir)) return false;
+      const files = fs.readdirSync(trashDir);
+      if (files.length === 0) return false;
+      
+      let latestFile = files[0];
+      let latestTime = fs.statSync(path.join(trashDir, latestFile)).mtimeMs;
+      for (const f of files) {
+        const t = fs.statSync(path.join(trashDir, f)).mtimeMs;
+        if (t > latestTime) {
+          latestTime = t;
+          latestFile = f;
+        }
+      }
+      
+      // Remove the timestamp prefix to get the original name
+      // Name was: `${Date.now()}_${fileName}`
+      const originalNameMatch = latestFile.match(/^\d+_(.+)$/);
+      const originalName = originalNameMatch ? originalNameMatch[1] : latestFile;
+      
+      fs.renameSync(path.join(trashDir, latestFile), path.join(vaultPath, originalName));
+      return true;
+    } catch (e) {
+      console.error('Restore error:', e);
+      return false;
+    }
+  });
 }

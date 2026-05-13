@@ -22,6 +22,7 @@ declare global {
         createFile: (path: string) => Promise<boolean>;
         renameFile: (oldPath: string, newPath: string) => Promise<boolean>;
         deleteFile: (path: string) => Promise<boolean>;
+        restoreLastDeleted: (vaultPath: string) => Promise<boolean>;
       }
     }
   }
