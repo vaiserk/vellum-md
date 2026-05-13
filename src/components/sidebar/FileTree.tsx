@@ -11,7 +11,8 @@ export function FileTree() {
     if (file.type === 'file') {
       const isImage = file.name.match(/\.(png|jpe?g|gif|svg|webp)$/i);
       if (isImage) {
-        setActiveFile(file.path, `![${file.name}](file:///${file.path.replace(/\\/g, '/')})`);
+        const safePath = encodeURI(`file:///${file.path.replace(/\\/g, '/')}`);
+        setActiveFile(file.path, `![${file.name}](${safePath})`);
       } else {
         const content = await window.electron.fs.readFile(file.path);
         setActiveFile(file.path, content);
