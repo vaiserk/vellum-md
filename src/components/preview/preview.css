@@ -1,0 +1,157 @@
+/* Preview Typography & Styling — VellumMD */
+
+.markdown-preview {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* Headings */
+.markdown-preview h1 { font-size: 2em; margin: 1.5em 0 0.5em; font-weight: 700; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3em; }
+.markdown-preview h2 { font-size: 1.5em; margin: 1.4em 0 0.4em; font-weight: 600; }
+.markdown-preview h3 { font-size: 1.25em; margin: 1.2em 0 0.3em; font-weight: 600; }
+.markdown-preview h4 { font-size: 1.1em; margin: 1em 0 0.3em; }
+
+/* Paragraphs & text */
+.markdown-preview p { margin: 0.8em 0; }
+.markdown-preview a { color: var(--accent); text-decoration: none; }
+.markdown-preview a:hover { text-decoration: underline; }
+.markdown-preview strong { font-weight: 700; }
+
+/* Images */
+.markdown-preview img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 1em 0;
+}
+
+/* Blockquotes */
+.markdown-preview blockquote {
+  border-left: 4px solid var(--accent);
+  margin: 1em 0;
+  padding: 0.5em 1em;
+  background: rgba(124, 106, 247, 0.06);
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+.markdown-preview blockquote p { margin: 0.3em 0; }
+
+/* Callouts — GitHub-style alerts */
+.markdown-preview .callout {
+  border-left: 4px solid;
+  margin: 1em 0;
+  padding: 0.75em 1em;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.95em;
+}
+.markdown-preview .callout-title {
+  font-weight: 700;
+  margin-bottom: 0.3em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.markdown-preview .callout-note { border-color: #4a90d9; background: rgba(74, 144, 217, 0.08); }
+.markdown-preview .callout-note .callout-title { color: #4a90d9; }
+.markdown-preview .callout-tip { border-color: #3fb950; background: rgba(63, 185, 80, 0.08); }
+.markdown-preview .callout-tip .callout-title { color: #3fb950; }
+.markdown-preview .callout-warning { border-color: #d29922; background: rgba(210, 153, 34, 0.08); }
+.markdown-preview .callout-warning .callout-title { color: #d29922; }
+.markdown-preview .callout-danger, .markdown-preview .callout-caution { border-color: #f85149; background: rgba(248, 81, 73, 0.08); }
+.markdown-preview .callout-danger .callout-title, .markdown-preview .callout-caution .callout-title { color: #f85149; }
+.markdown-preview .callout-important { border-color: #a371f7; background: rgba(163, 113, 247, 0.08); }
+.markdown-preview .callout-important .callout-title { color: #a371f7; }
+
+/* Tables — zebra striping */
+.markdown-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 0.9em;
+}
+.markdown-preview th, .markdown-preview td {
+  border: 1px solid var(--border-color);
+  padding: 8px 12px;
+  text-align: left;
+}
+.markdown-preview th {
+  background: var(--sidebar-bg);
+  font-weight: 600;
+}
+.markdown-preview tr:nth-child(even) {
+  background: rgba(128, 128, 128, 0.05);
+}
+
+/* Inline code */
+.markdown-preview code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85em;
+  background: var(--sidebar-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Code blocks */
+.markdown-preview pre {
+  background: var(--sidebar-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1em;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+.markdown-preview pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Horizontal rules */
+.markdown-preview hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 2em 0;
+}
+
+/* Lists */
+.markdown-preview ul, .markdown-preview ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+.markdown-preview li { margin: 0.3em 0; }
+
+/* Task lists (GFM) */
+.markdown-preview li input[type="checkbox"] {
+  margin-right: 6px;
+  accent-color: var(--accent);
+}
+
+/* Mermaid container */
+.mermaid-container {
+  display: flex;
+  justify-content: center;
+  margin: 1.5em 0;
+  overflow-x: auto;
+}
+.mermaid-container svg {
+  max-width: 100%;
+}
+
+/* Wikilinks in preview */
+.markdown-preview .wikilink {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--accent);
+  cursor: pointer;
+}
+.markdown-preview .wikilink:hover {
+  opacity: 0.8;
+}
+
+/* KaTeX display math centering */
+.markdown-preview .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5em 0;
+}
