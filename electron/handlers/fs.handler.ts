@@ -27,7 +27,7 @@ export function setupFsHandlers(ipcMain: Electron.IpcMain, dialog: Electron.Dial
               children: walk(filePath),
               mtime: stat.mtimeMs,
             });
-          } else if (file.endsWith('.md')) {
+          } else if (file.match(/\.(md|txt|png|jpe?g|gif|svg|webp)$/i)) {
             results.push({
               name: file,
               path: filePath,

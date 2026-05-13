@@ -9,8 +9,13 @@ export function FileTree() {
 
   const handleFileClick = async (file: FileNode) => {
     if (file.type === 'file') {
-      const content = await window.electron.fs.readFile(file.path);
-      setActiveFile(file.path, content);
+      const isImage = file.name.match(/\.(png|jpe?g|gif|svg|webp)$/i);
+      if (isImage) {
+        setActiveFile(file.path, `![${file.name}](file:///${file.path.replace(/\\/g, '/')})`);
+      } else {
+        const content = await window.electron.fs.readFile(file.path);
+        setActiveFile(file.path, content);
+      }
     }
   };
 
