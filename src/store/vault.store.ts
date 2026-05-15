@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { EmbeddingService, extractTags } from '../services/embedding.service';
+import { useSettingsStore } from './settings.store';
 
 export interface AIMessage {
   role: 'user' | 'assistant' | 'system';
@@ -16,6 +18,16 @@ export interface FileNode {
 
 type LayoutMode = 'split' | 'editor-only' | 'preview-only';
 type SaveStatus = 'saved' | 'saving' | 'error' | 'idle';
+type EmbeddingStatus = 'idle' | 'indexing' | 'ready' | 'error';
+
+function flattenFiles(nodes: FileNode[]): FileNode[] {
+  const result: FileNode[] = [];
+  for (const node of nodes) {
+    if (node.type === 'file') result.push(node);
+    if (node.children) result.push(...flattenFiles(node.children));
+  }
+  return result;
+}
 
 interface VaultState {
   vaultPath: string | null;
@@ -44,6 +56,14 @@ interface VaultState {
     onCancel: () => void;
   } | null;
   aiMessages: AIMessage[];
+
+  // Semantic index
+  embeddingIndex: Map<string, number[]>;
+  tagIndex: Map<string, string[]>;
+  embeddingStatus: EmbeddingStatus;
+  indexingProgress: { current: number; total: number };
+
+
   setVaultPath: (path: string | null) => void;
   setFiles: (files: FileNode[]) => void;
   setActiveFile: (path: string | null, content?: string) => void;
@@ -62,6 +82,8 @@ interface VaultState {
   openConfirm: (message: string) => Promise<boolean>;
   closeConfirm: () => void;
   cycleLayoutMode: () => void;
+  buildEmbeddingIndex: () => Promise<void>;
+  loadTagsOnly: () => Promise<void>;
 }
 
 export const useVaultStore = create<VaultState>((set, get) => ({
@@ -80,6 +102,12 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   promptModal: null,
   confirmModal: null,
   aiMessages: [],
+  embeddingIndex: new Map(),
+  tagIndex: new Map(),
+  embeddingStatus: 'idle',
+  indexingProgress: { current: 0, total: 0 },
+  editorScrollRatio: 0,
+
   setVaultPath: (path) => set({ vaultPath: path }),
   setFiles: (files) => set({ files }),
   setActiveFile: (path, content = '') => set({ activeFile: path, activeContent: content }),
@@ -92,9 +120,10 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   setTypewriterMode: (on) => set({ typewriterMode: on }),
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   setAiPanelOpen: (open) => set({ aiPanelOpen: open }),
-  setAiMessages: (updater) => set((state) => ({ 
-    aiMessages: typeof updater === 'function' ? updater(state.aiMessages) : updater 
+  setAiMessages: (updater) => set((state) => ({
+    aiMessages: typeof updater === 'function' ? updater(state.aiMessages) : updater,
   })),
+
   openPrompt: (title, defaultValue) => {
     return new Promise((resolve) => {
       set({
@@ -109,12 +138,13 @@ export const useVaultStore = create<VaultState>((set, get) => ({
           onCancel: () => {
             resolve(null);
             set({ promptModal: null });
-          }
-        }
+          },
+        },
       });
     });
   },
   closePrompt: () => set({ promptModal: null }),
+
   openConfirm: (message) => {
     return new Promise((resolve) => {
       set({
@@ -128,16 +158,114 @@ export const useVaultStore = create<VaultState>((set, get) => ({
           onCancel: () => {
             resolve(false);
             set({ confirmModal: null });
-          }
-        }
+          },
+        },
       });
     });
   },
   closeConfirm: () => set({ confirmModal: null }),
+
   cycleLayoutMode: () => {
     const modes: LayoutMode[] = ['split', 'editor-only', 'preview-only'];
     const current = get().layoutMode;
     const next = modes[(modes.indexOf(current) + 1) % modes.length];
     set({ layoutMode: next });
+  },
+
+  loadTagsOnly: async () => {
+    const { vaultPath, files } = get();
+    if (!vaultPath) return;
+
+    const mdFiles = flattenFiles(files).filter(f => f.name.endsWith('.md'));
+    const tagIndex = new Map<string, string[]>();
+
+    for (const file of mdFiles) {
+      try {
+        const content = await window.electron.fs.readFile(file.path);
+        const tags = extractTags(content);
+        if (tags.length > 0) tagIndex.set(file.path, tags);
+      } catch {
+        // skip unreadable files
+      }
+    }
+
+    set({ tagIndex });
+  },
+
+  buildEmbeddingIndex: async () => {
+    const { vaultPath, files } = get();
+    const settings = useSettingsStore.getState();
+    const effectiveKey = settings.embeddingApiKey || settings.apiKey;
+
+    if (!vaultPath) return;
+    if (!effectiveKey) {
+      set({ embeddingStatus: 'error' });
+      return;
+    }
+
+    set({ embeddingStatus: 'indexing', indexingProgress: { current: 0, total: 0 } });
+
+    try {
+      const cache: EmbeddingCache = await window.electron.fs.readEmbeddingCache(vaultPath);
+      const entries: Record<string, EmbeddingCacheEntry> = cache.entries ?? {};
+
+      const mdFiles = flattenFiles(files).filter(f => f.name.endsWith('.md'));
+      set({ indexingProgress: { current: 0, total: mdFiles.length } });
+
+      const embeddingIndex = new Map<string, number[]>();
+      const tagIndex = new Map<string, string[]>();
+
+      for (let i = 0; i < mdFiles.length; i++) {
+        const file = mdFiles[i];
+        const cached = entries[file.path];
+
+        // Always read content to extract tags
+        let content = '';
+        try {
+          content = await window.electron.fs.readFile(file.path);
+        } catch {
+          set({ indexingProgress: { current: i + 1, total: mdFiles.length } });
+          continue;
+        }
+
+        const tags = extractTags(content);
+        if (tags.length > 0) tagIndex.set(file.path, tags);
+
+        // Reuse cached embedding if file hasn't changed
+        if (cached && cached.mtime === file.mtime) {
+          embeddingIndex.set(file.path, cached.embedding);
+        } else {
+          try {
+            const embedding = await EmbeddingService.embed(
+              content,
+              settings.embeddingProvider,
+              settings.embeddingModel,
+              effectiveKey
+            );
+            embeddingIndex.set(file.path, embedding);
+            entries[file.path] = { mtime: file.mtime, embedding };
+            // Small delay to respect API rate limits
+            await new Promise(r => setTimeout(r, 50));
+          } catch (e) {
+            console.error(`Embedding failed for ${file.name}:`, e);
+          }
+        }
+
+        set({ indexingProgress: { current: i + 1, total: mdFiles.length } });
+      }
+
+      const updatedCache: EmbeddingCache = {
+        version: 1,
+        provider: settings.embeddingProvider,
+        model: settings.embeddingModel,
+        entries,
+      };
+      await window.electron.fs.writeEmbeddingCache(vaultPath, updatedCache);
+
+      set({ embeddingIndex, tagIndex, embeddingStatus: 'ready' });
+    } catch (e) {
+      console.error('buildEmbeddingIndex error:', e);
+      set({ embeddingStatus: 'error' });
+    }
   },
 }));

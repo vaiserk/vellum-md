@@ -26,7 +26,6 @@ mermaid.initialize({
 
 // Mermaid rendering component
 function MermaidBlock({ code }: { code: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>('');
   const [error, setError] = useState<string>('');
 
@@ -185,7 +184,47 @@ function remarkCallouts() {
 }
 
 export function Preview() {
-  const { activeContent, theme } = useVaultStore();
+  const { activeContent, theme, editorView } = useVaultStore();
+  const previewRef = useRef<HTMLDivElement>(null);
+  const syncSourceRef = useRef<'editor' | 'preview' | null>(null);
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Attach scroll listener to editor's scrollDOM whenever editorView changes
+  useEffect(() => {
+    if (!editorView) return;
+    const onEditorScroll = () => {
+      if (syncSourceRef.current === 'preview') return;
+      const preview = previewRef.current;
+      if (!preview) return;
+      syncSourceRef.current = 'editor';
+      clearTimeout(syncTimeoutRef.current);
+      const { scrollTop, scrollHeight, clientHeight } = editorView.scrollDOM;
+      const scrollable = scrollHeight - clientHeight;
+      if (scrollable > 0) {
+        const ratio = scrollTop / scrollable;
+        const previewScrollable = preview.scrollHeight - preview.clientHeight;
+        preview.scrollTop = ratio * previewScrollable;
+      }
+      syncTimeoutRef.current = setTimeout(() => { syncSourceRef.current = null; }, 150);
+    };
+    editorView.scrollDOM.addEventListener('scroll', onEditorScroll);
+    return () => editorView.scrollDOM.removeEventListener('scroll', onEditorScroll);
+  }, [editorView]);
+
+  const handlePreviewScroll = () => {
+    if (syncSourceRef.current === 'editor') return;
+    const preview = previewRef.current;
+    if (!preview || !editorView) return;
+    syncSourceRef.current = 'preview';
+    clearTimeout(syncTimeoutRef.current);
+    const scrollable = preview.scrollHeight - preview.clientHeight;
+    if (scrollable > 0) {
+      const ratio = preview.scrollTop / scrollable;
+      const editorScrollable = editorView.scrollDOM.scrollHeight - editorView.scrollDOM.clientHeight;
+      editorView.scrollDOM.scrollTop = ratio * editorScrollable;
+    }
+    syncTimeoutRef.current = setTimeout(() => { syncSourceRef.current = null; }, 150);
+  };
 
   const renderedContent = useMemo(() => {
     try {
@@ -199,7 +238,7 @@ export function Preview() {
         .use(remarkWikilinks)
         .use(remarkRehype, { allowDangerousHtml: true })
         .use(rehypeKatex)
-        .use(rehypeHighlight, { ignoreMissing: true })
+        .use(rehypeHighlight, true)
         .use(rehypeReact, {
           ...{ Fragment: prod.Fragment, jsx: prod.jsx, jsxs: prod.jsxs },
           components: {
@@ -207,7 +246,7 @@ export function Preview() {
             img: CustomImg,
             span: (props: any) => {
               if (props.className === 'wikilink') {
-                return <span {...props} onClick={(e) => {
+                return <span {...props} onClick={() => {
                   if (props.onClick) {
                     // Extract the event dispatch string and execute it safely
                     const match = props.onClick.match(/name: '([^']+)'/);
@@ -230,7 +269,7 @@ export function Preview() {
   }, [activeContent, theme]);
 
   return (
-    <div className="markdown-preview">
+    <div ref={previewRef} className="markdown-preview" onScroll={handlePreviewScroll}>
       {renderedContent}
     </div>
   );

@@ -9,20 +9,31 @@ import { SettingsModal } from './components/modals/SettingsModal';
 import { ExportModal } from './components/modals/ExportModal';
 import { OnboardingWizard } from './components/modals/OnboardingWizard';
 import { AIPanel } from './components/ai/AIPanel';
+import { LinkSuggestion } from './components/ai/LinkSuggestion';
 import { PromptModal } from './components/modals/PromptModal';
 import { ConfirmModal } from './components/modals/ConfirmModal';
 import { useVaultStore } from './store/vault.store';
 import { useSettingsStore } from './store/settings.store';
 
 function App() {
-  const { vaultPath, theme, layoutMode, commandPaletteOpen, setCommandPaletteOpen, aiPanelOpen, setAiPanelOpen } = useVaultStore();
-  const { settingsOpen, setSettingsOpen, fontSize, fontFamily, editorMaxWidth } = useSettingsStore();
+  const { vaultPath, theme, layoutMode, commandPaletteOpen, setCommandPaletteOpen, aiPanelOpen, setAiPanelOpen, buildEmbeddingIndex, loadTagsOnly } = useVaultStore();
+  const { settingsOpen, setSettingsOpen, fontSize, fontFamily, editorMaxWidth, suggestConnections, embeddingApiKey, apiKey } = useSettingsStore();
   const [exportOpen, setExportOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => {
     // Resetar para mostrar o wizard novamente
     localStorage.removeItem('vellum-onboarding-done');
     return true;
   });
+
+  // Trigger tag loading and optional semantic indexing when vault opens
+  useEffect(() => {
+    if (!vaultPath) return;
+    loadTagsOnly();
+    const hasKey = embeddingApiKey || apiKey;
+    if (suggestConnections && hasKey) {
+      buildEmbeddingIndex();
+    }
+  }, [vaultPath]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -189,6 +200,7 @@ function App() {
       {exportOpen && <ExportModal onClose={() => setExportOpen(false)} />}
       <PromptModal />
       <ConfirmModal />
+      {vaultPath && <LinkSuggestion />}
     </div>
   );
 }

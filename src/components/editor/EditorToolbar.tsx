@@ -74,23 +74,23 @@ export function EditorToolbar() {
 
   return (
     <div className="editor-toolbar">
-      <button onClick={() => handleAction('bold')} title="Bold"><Bold size={16} /></button>
-      <button onClick={() => handleAction('italic')} title="Italic"><Italic size={16} /></button>
-      <button onClick={() => handleAction('strikethrough')} title="Strikethrough"><Strikethrough size={16} /></button>
+      <button onClick={() => handleAction('bold')} title="Negrito (Ctrl+B)"><Bold size={16} /></button>
+      <button onClick={() => handleAction('italic')} title="Itálico (Ctrl+I)"><Italic size={16} /></button>
+      <button onClick={() => handleAction('strikethrough')} title="Tachado"><Strikethrough size={16} /></button>
       <div className="toolbar-divider" />
-      <button onClick={() => handleAction('h1')} title="Heading 1"><Heading1 size={16} /></button>
-      <button onClick={() => handleAction('h2')} title="Heading 2"><Heading2 size={16} /></button>
-      <button onClick={() => handleAction('h3')} title="Heading 3"><Heading3 size={16} /></button>
+      <button onClick={() => handleAction('h1')} title="Título 1"><Heading1 size={16} /></button>
+      <button onClick={() => handleAction('h2')} title="Título 2"><Heading2 size={16} /></button>
+      <button onClick={() => handleAction('h3')} title="Título 3"><Heading3 size={16} /></button>
       <div className="toolbar-divider" />
-      <button onClick={() => handleAction('quote')} title="Quote"><Quote size={16} /></button>
-      <button onClick={() => handleAction('list')} title="List"><List size={16} /></button>
-      <button onClick={() => handleAction('code')} title="Code"><Code size={16} /></button>
+      <button onClick={() => handleAction('quote')} title="Citação (blockquote)"><Quote size={16} /></button>
+      <button onClick={() => handleAction('list')} title="Lista com marcadores"><List size={16} /></button>
+      <button onClick={() => handleAction('code')} title="Código inline"><Code size={16} /></button>
       <div className="toolbar-divider" />
-      <button onClick={() => handleAction('latex')} title="LaTeX"><SquareFunction size={16} /></button>
-      <button onClick={() => handleAction('mermaid')} title="Mermaid"><GitBranch size={16} /></button>
-      <button onClick={() => handleAction('table')} title="Table"><Table size={16} /></button>
-      <button onClick={() => handleAction('link')} title="Link"><LinkIcon size={16} /></button>
-      <button onClick={() => handleAction('image')} title="Image"><ImageIcon size={16} /></button>
+      <button onClick={() => handleAction('latex')} title="Bloco LaTeX (Ctrl+Shift+M)"><SquareFunction size={16} /></button>
+      <button onClick={() => handleAction('mermaid')} title="Diagrama Mermaid (Ctrl+Shift+D)"><GitBranch size={16} /></button>
+      <button onClick={() => handleAction('table')} title="Tabela Markdown"><Table size={16} /></button>
+      <button onClick={() => handleAction('link')} title="Link [texto](url)"><LinkIcon size={16} /></button>
+      <button onClick={() => handleAction('image')} title="Imagem ![alt](url)"><ImageIcon size={16} /></button>
       <div className="toolbar-divider" />
       <button onClick={() => setAiPanelOpen(!aiPanelOpen)} title="Assistente IA (Ctrl+Shift+A)" className={aiPanelOpen ? 'active' : ''}><Sparkles size={16} /></button>
     </div>

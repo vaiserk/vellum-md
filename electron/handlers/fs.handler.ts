@@ -96,7 +96,7 @@ export function setupFsHandlers(ipcMain: Electron.IpcMain, dialog: Electron.Dial
       if (!fs.existsSync(trashDir)) return false;
       const files = fs.readdirSync(trashDir);
       if (files.length === 0) return false;
-      
+
       let latestFile = files[0];
       let latestTime = fs.statSync(path.join(trashDir, latestFile)).mtimeMs;
       for (const f of files) {
@@ -106,16 +106,43 @@ export function setupFsHandlers(ipcMain: Electron.IpcMain, dialog: Electron.Dial
           latestFile = f;
         }
       }
-      
+
       // Remove the timestamp prefix to get the original name
       // Name was: `${Date.now()}_${fileName}`
       const originalNameMatch = latestFile.match(/^\d+_(.+)$/);
       const originalName = originalNameMatch ? originalNameMatch[1] : latestFile;
-      
+
       fs.renameSync(path.join(trashDir, latestFile), path.join(vaultPath, originalName));
       return true;
     } catch (e) {
       console.error('Restore error:', e);
+      return false;
+    }
+  });
+
+  ipcMain.handle('fs:readEmbeddingCache', async (_, vaultPath: string) => {
+    try {
+      const cachePath = path.join(vaultPath, '.vellum', 'embeddings.json');
+      if (!fs.existsSync(cachePath)) return {};
+      const raw = fs.readFileSync(cachePath, 'utf-8');
+      return JSON.parse(raw);
+    } catch (e) {
+      console.error('Read embedding cache error:', e);
+      return {};
+    }
+  });
+
+  ipcMain.handle('fs:writeEmbeddingCache', async (_, vaultPath: string, data: any) => {
+    try {
+      const vellumDir = path.join(vaultPath, '.vellum');
+      if (!fs.existsSync(vellumDir)) {
+        fs.mkdirSync(vellumDir, { recursive: true });
+      }
+      const cachePath = path.join(vellumDir, 'embeddings.json');
+      fs.writeFileSync(cachePath, JSON.stringify(data), 'utf-8');
+      return true;
+    } catch (e) {
+      console.error('Write embedding cache error:', e);
       return false;
     }
   });

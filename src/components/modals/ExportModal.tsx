@@ -13,22 +13,6 @@ import rehypeHighlight from 'rehype-highlight';
 import rehypeStringify from 'rehype-stringify';
 import { SlideEditorModal } from './SlideEditorModal';
 
-declare global {
-  interface Window {
-    electron: {
-      fs: {
-        readDir: (vaultPath: string) => Promise<any[]>;
-        readFile: (filePath: string) => Promise<string>;
-      };
-      export: {
-        pdf: (options: any) => Promise<{ success: boolean; path?: string; error?: string }>;
-        slides: (options: any) => Promise<{ success: boolean; path?: string; error?: string }>;
-        site: (options: any) => Promise<{ success: boolean; path?: string; error?: string }>;
-      };
-    };
-  }
-}
-
 type ExportTab = 'pdf' | 'slides' | 'site';
 
 // ─── Markdown → HTML (unified pipeline) ─────────────────────────────────────

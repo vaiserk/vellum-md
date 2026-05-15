@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useSettingsStore } from '../../store/settings.store';
+import { useVaultStore } from '../../store/vault.store';
 import { AIService } from '../../services/ai.service';
 import { X } from 'lucide-react';
 
 export function SettingsModal() {
   const settings = useSettingsStore();
+  const { embeddingStatus, indexingProgress, buildEmbeddingIndex } = useVaultStore();
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
 
   const provider = settings.getProvider();
@@ -136,7 +138,7 @@ export function SettingsModal() {
 
             <div className="settings-row">
               <label>Formato PDF</label>
-              <select 
+              <select
                 value={settings.pdfFormat}
                 onChange={e => settings.setPdfFormat(e.target.value as any)}
               >
@@ -148,13 +150,86 @@ export function SettingsModal() {
 
             <div className="settings-row">
               <label>Orientação</label>
-              <select 
+              <select
                 value={settings.pdfOrientation}
                 onChange={e => settings.setPdfOrientation(e.target.value as any)}
               >
                 <option value="portrait">Retrato</option>
                 <option value="landscape">Paisagem</option>
               </select>
+            </div>
+          </div>
+
+          {/* Semantic Search Section */}
+          <div className="settings-section">
+            <h4>Busca Semântica</h4>
+
+            <div className="settings-row">
+              <label>Provedor de Embedding</label>
+              <select
+                value={settings.embeddingProvider}
+                onChange={e => settings.setEmbeddingProvider(e.target.value as any)}
+              >
+                {Object.entries(settings.getEmbeddingProviders()).map(([key, p]) => (
+                  <option key={key} value={key}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="settings-row">
+              <label>Modelo</label>
+              <select
+                value={settings.embeddingModel}
+                onChange={e => settings.setEmbeddingModel(e.target.value)}
+              >
+                {settings.getEmbeddingProviders()[settings.embeddingProvider]?.availableModels.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="settings-row">
+              <label>Chave de Embedding</label>
+              <div className="settings-control" style={{ flex: 1 }}>
+                <input
+                  type="password"
+                  value={settings.embeddingApiKey}
+                  onChange={e => settings.setEmbeddingApiKey(e.target.value)}
+                  placeholder="Vazio = usa a chave de IA acima"
+                  className="search-input"
+                  style={{ marginBottom: 0, flex: 1 }}
+                />
+              </div>
+            </div>
+
+            <div className="settings-row">
+              <label>Sugestão de conexões</label>
+              <input
+                type="checkbox"
+                checked={settings.suggestConnections}
+                onChange={e => settings.setSuggestConnections(e.target.checked)}
+              />
+            </div>
+
+            <div className="settings-row">
+              <label>Status do índice</label>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                {embeddingStatus === 'idle' && 'Não indexado'}
+                {embeddingStatus === 'indexing' && `Indexando... ${indexingProgress.current}/${indexingProgress.total}`}
+                {embeddingStatus === 'ready' && '✓ Pronto'}
+                {embeddingStatus === 'error' && '✕ Erro (verifique a chave)'}
+              </span>
+            </div>
+
+            <div className="settings-row">
+              <label />
+              <button
+                onClick={() => buildEmbeddingIndex()}
+                disabled={embeddingStatus === 'indexing'}
+                style={{ fontSize: '11px', padding: '4px 8px' }}
+              >
+                {embeddingStatus === 'indexing' ? 'Indexando...' : 'Reindexar Vault'}
+              </button>
             </div>
           </div>
         </div>

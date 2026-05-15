@@ -10,30 +10,14 @@ import { useVaultStore } from '../../store/vault.store';
 import { wikilinkHighlighter } from './extensions/wikilink.ext';
 import { typewriterExtension, toggleTypewriter } from './extensions/typewriter.ext';
 import { slashCommandsExtension } from './extensions/slash-commands.ext';
-
-declare global {
-  interface Window {
-    electron: {
-      fs: {
-        openVault: () => Promise<string>;
-        readDir: (path: string) => Promise<any[]>;
-        readFile: (path: string) => Promise<string>;
-        writeFile: (path: string, content: string) => Promise<boolean>;
-        createFile: (path: string) => Promise<boolean>;
-        renameFile: (oldPath: string, newPath: string) => Promise<boolean>;
-        deleteFile: (path: string) => Promise<boolean>;
-        restoreLastDeleted: (vaultPath: string) => Promise<boolean>;
-      }
-    }
-  }
-}
+import { aiContextMenuExtension } from './extensions/ai-context-menu.ext';
 
 export function Editor() {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView>();
-  const { 
+  const {
     activeFile, activeContent, setActiveContent, setEditorView,
-    setSaveStatus, setCursorPosition
+    setSaveStatus, setCursorPosition,
   } = useVaultStore();
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
 
@@ -170,6 +154,7 @@ export function Editor() {
         wikilinkHighlighter,
         ...typewriterExtension,
         slashCommandsExtension,
+        aiContextMenuExtension,
         onUpdate,
       ],
     });
@@ -178,7 +163,7 @@ export function Editor() {
       state,
       parent: editorRef.current,
     });
-    
+
     viewRef.current = view;
     setEditorView(view);
 

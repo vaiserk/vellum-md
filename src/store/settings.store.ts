@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { EmbeddingProviderKey, embeddingProviders } from '../services/embedding.service';
 
 export interface AIProvider {
   name: string;
@@ -43,6 +44,11 @@ interface SettingsState {
   aiEnabled: boolean;
   suggestConnections: boolean;
 
+  // Embedding
+  embeddingProvider: EmbeddingProviderKey;
+  embeddingModel: string;
+  embeddingApiKey: string;
+
   // Editor
   fontSize: number;
   fontFamily: string;
@@ -63,6 +69,9 @@ interface SettingsState {
   setAiModel: (model: string) => void;
   setAiEnabled: (on: boolean) => void;
   setSuggestConnections: (on: boolean) => void;
+  setEmbeddingProvider: (provider: EmbeddingProviderKey) => void;
+  setEmbeddingModel: (model: string) => void;
+  setEmbeddingApiKey: (key: string) => void;
   setFontSize: (size: number) => void;
   setFontFamily: (font: string) => void;
   setEditorMaxWidth: (width: number) => void;
@@ -75,6 +84,7 @@ interface SettingsState {
   // Helpers
   getProvider: () => AIProvider;
   getAvailableProviders: () => Record<string, AIProvider>;
+  getEmbeddingProviders: () => typeof embeddingProviders;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -85,6 +95,9 @@ export const useSettingsStore = create<SettingsState>()(
       aiModel: 'gpt-4o-mini',
       aiEnabled: false,
       suggestConnections: true,
+      embeddingProvider: 'google',
+      embeddingModel: 'text-embedding-004',
+      embeddingApiKey: '',
       fontSize: 16,
       fontFamily: 'Inter',
       editorMaxWidth: 900,
@@ -102,6 +115,12 @@ export const useSettingsStore = create<SettingsState>()(
       setAiModel: (model) => set({ aiModel: model }),
       setAiEnabled: (on) => set({ aiEnabled: on }),
       setSuggestConnections: (on) => set({ suggestConnections: on }),
+      setEmbeddingProvider: (provider) => {
+        const p = embeddingProviders[provider];
+        set({ embeddingProvider: provider, embeddingModel: p?.defaultModel || '' });
+      },
+      setEmbeddingModel: (model) => set({ embeddingModel: model }),
+      setEmbeddingApiKey: (key) => set({ embeddingApiKey: key }),
       setFontSize: (size) => set({ fontSize: size }),
       setFontFamily: (font) => set({ fontFamily: font }),
       setEditorMaxWidth: (width) => set({ editorMaxWidth: width }),
@@ -113,6 +132,7 @@ export const useSettingsStore = create<SettingsState>()(
 
       getProvider: () => providers[get().aiProvider] || providers.openai,
       getAvailableProviders: () => providers,
+      getEmbeddingProviders: () => embeddingProviders,
     }),
     {
       name: 'vellum-settings',
@@ -122,6 +142,9 @@ export const useSettingsStore = create<SettingsState>()(
         aiModel: state.aiModel,
         aiEnabled: state.aiEnabled,
         suggestConnections: state.suggestConnections,
+        embeddingProvider: state.embeddingProvider,
+        embeddingModel: state.embeddingModel,
+        embeddingApiKey: state.embeddingApiKey,
         fontSize: state.fontSize,
         fontFamily: state.fontFamily,
         editorMaxWidth: state.editorMaxWidth,
