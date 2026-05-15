@@ -20,6 +20,9 @@ declare global {
         slides: (options: any) => Promise<any>;
         site: (options: any) => Promise<any>;
       };
+      shell: {
+        openExternal: (url: string) => Promise<void>;
+      };
     };
   }
 

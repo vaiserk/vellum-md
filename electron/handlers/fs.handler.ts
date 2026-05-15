@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { shell } from 'electron';
 
 export function setupFsHandlers(ipcMain: Electron.IpcMain, dialog: Electron.Dialog) {
   ipcMain.handle('fs:openVault', async () => {
@@ -145,5 +146,9 @@ export function setupFsHandlers(ipcMain: Electron.IpcMain, dialog: Electron.Dial
       console.error('Write embedding cache error:', e);
       return false;
     }
+  });
+
+  ipcMain.handle('shell:openExternal', async (_, url: string) => {
+    await shell.openExternal(url);
   });
 }

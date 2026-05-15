@@ -20,9 +20,7 @@ function App() {
   const { settingsOpen, setSettingsOpen, fontSize, fontFamily, editorMaxWidth, suggestConnections, embeddingApiKey, apiKey } = useSettingsStore();
   const [exportOpen, setExportOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => {
-    // Resetar para mostrar o wizard novamente
-    localStorage.removeItem('vellum-onboarding-done');
-    return true;
+    return !localStorage.getItem('vellum-onboarding-done');
   });
 
   // Trigger tag loading and optional semantic indexing when vault opens

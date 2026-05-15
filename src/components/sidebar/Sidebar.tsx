@@ -18,7 +18,7 @@ interface SemanticResult {
 export function Sidebar() {
   const {
     vaultPath, setVaultPath, setFiles, files, theme, setTheme, setActiveFile,
-    embeddingIndex, embeddingStatus, indexingProgress, tagIndex, loadTagsOnly,
+    embeddingIndex, embeddingStatus, indexingProgress, tagIndex, fileContents, loadTagsOnly,
   } = useVaultStore();
   const { setSettingsOpen, embeddingApiKey, apiKey, embeddingProvider, embeddingModel } = useSettingsStore();
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
@@ -64,9 +64,14 @@ export function Sidebar() {
 
   const allFiles = flattenFiles(files);
 
-  // Lexical search
+  // Lexical search — matches filename OR file content
   const lexicalResults = searchQuery.trim()
-    ? allFiles.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    ? allFiles.filter(f => {
+        const q = searchQuery.toLowerCase();
+        if (f.name.toLowerCase().includes(q)) return true;
+        const content = fileContents.get(f.path);
+        return content ? content.toLowerCase().includes(q) : false;
+      })
     : [];
 
   // Semantic search with debounce
@@ -224,11 +229,26 @@ export function Sidebar() {
             />
 
             {/* Lexical results */}
-            {searchMode === 'lexical' && lexicalResults.map(file => (
-              <div key={file.path} className="search-result" onClick={() => handleFileClick(file)}>
-                <div className="search-result-title">📄 {file.name.replace('.md', '')}</div>
-              </div>
-            ))}
+            {searchMode === 'lexical' && lexicalResults.map(file => {
+              const q = searchQuery.toLowerCase();
+              const nameMatch = file.name.toLowerCase().includes(q);
+              let snippet: string | null = null;
+              if (!nameMatch) {
+                const content = fileContents.get(file.path) ?? '';
+                const idx = content.toLowerCase().indexOf(q);
+                if (idx !== -1) {
+                  const start = Math.max(0, idx - 30);
+                  const end = Math.min(content.length, idx + q.length + 60);
+                  snippet = (start > 0 ? '…' : '') + content.slice(start, end).replace(/\n/g, ' ') + (end < content.length ? '…' : '');
+                }
+              }
+              return (
+                <div key={file.path} className="search-result" onClick={() => handleFileClick(file)}>
+                  <div className="search-result-title">📄 {file.name.replace('.md', '')}</div>
+                  {snippet && <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px', lineHeight: 1.4 }}>{snippet}</div>}
+                </div>
+              );
+            })}
             {searchMode === 'lexical' && searchQuery && lexicalResults.length === 0 && (
               <div style={{ padding: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>Nenhum resultado</div>
             )}

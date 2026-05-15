@@ -1,4 +1,3 @@
-import React from 'react';
 import { Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, Quote, List, Table, Image as ImageIcon, Link as LinkIcon, SquareFunction, GitBranch, Sparkles } from 'lucide-react';
 
 import { useVaultStore } from '../../store/vault.store';

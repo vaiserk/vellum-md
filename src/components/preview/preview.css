@@ -7,7 +7,7 @@
 }
 
 /* Headings */
-.markdown-preview h1 { font-size: 2em; margin: 1.5em 0 0.5em; font-weight: 700; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3em; }
+.markdown-preview h1 { font-size: 2em; margin: 1.5em 0 0.5em; font-weight: 700; }
 .markdown-preview h2 { font-size: 1.5em; margin: 1.4em 0 0.4em; font-weight: 600; }
 .markdown-preview h3 { font-size: 1.25em; margin: 1.2em 0 0.3em; font-weight: 600; }
 .markdown-preview h4 { font-size: 1.1em; margin: 1em 0 0.3em; }
@@ -57,8 +57,10 @@
 .markdown-preview .callout-tip .callout-title { color: #3fb950; }
 .markdown-preview .callout-warning { border-color: #d29922; background: rgba(210, 153, 34, 0.08); }
 .markdown-preview .callout-warning .callout-title { color: #d29922; }
-.markdown-preview .callout-danger, .markdown-preview .callout-caution { border-color: #f85149; background: rgba(248, 81, 73, 0.08); }
-.markdown-preview .callout-danger .callout-title, .markdown-preview .callout-caution .callout-title { color: #f85149; }
+.markdown-preview .callout-danger  { border-color: #f85149; background: rgba(248, 81, 73, 0.08); }
+.markdown-preview .callout-danger .callout-title  { color: #f85149; }
+.markdown-preview .callout-caution { border-color: #e3a14f; background: rgba(227, 161, 79, 0.08); }
+.markdown-preview .callout-caution .callout-title { color: #e3a14f; }
 .markdown-preview .callout-important { border-color: #a371f7; background: rgba(163, 113, 247, 0.08); }
 .markdown-preview .callout-important .callout-title { color: #a371f7; }
 
@@ -106,6 +108,30 @@
   font-size: 14px;
   line-height: 1.5;
 }
+/* Copy button wrapper */
+.code-block-wrapper {
+  position: relative;
+  margin: 1em 0;
+}
+.code-block-wrapper pre {
+  margin: 0;
+}
+.copy-code-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--border-color);
+  color: var(--text-secondary);
+  border: none;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.code-block-wrapper:hover .copy-code-btn { opacity: 1; }
+.copy-code-btn:hover { background: var(--accent); color: #fff; }
 
 /* Horizontal rules */
 .markdown-preview hr {

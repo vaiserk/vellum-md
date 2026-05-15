@@ -1,12 +1,10 @@
-import { 
-  ViewPlugin, 
-  Decoration, 
+import {
+  ViewPlugin,
+  Decoration,
   DecorationSet,
   EditorView,
-  WidgetType,
   MatchDecorator
 } from '@codemirror/view';
-import { StateField, StateEffect, RangeSetBuilder } from '@codemirror/state';
 
 // Wikilink decoration: matches [[...]] and styles them
 const wikilinkMatcher = new MatchDecorator({

@@ -60,6 +60,7 @@ interface VaultState {
   // Semantic index
   embeddingIndex: Map<string, number[]>;
   tagIndex: Map<string, string[]>;
+  fileContents: Map<string, string>;
   embeddingStatus: EmbeddingStatus;
   indexingProgress: { current: number; total: number };
 
@@ -104,9 +105,9 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   aiMessages: [],
   embeddingIndex: new Map(),
   tagIndex: new Map(),
+  fileContents: new Map(),
   embeddingStatus: 'idle',
   indexingProgress: { current: 0, total: 0 },
-  editorScrollRatio: 0,
 
   setVaultPath: (path) => set({ vaultPath: path }),
   setFiles: (files) => set({ files }),
@@ -178,10 +179,12 @@ export const useVaultStore = create<VaultState>((set, get) => ({
 
     const mdFiles = flattenFiles(files).filter(f => f.name.endsWith('.md'));
     const tagIndex = new Map<string, string[]>();
+    const fileContents = new Map<string, string>();
 
     for (const file of mdFiles) {
       try {
         const content = await window.electron.fs.readFile(file.path);
+        fileContents.set(file.path, content);
         const tags = extractTags(content);
         if (tags.length > 0) tagIndex.set(file.path, tags);
       } catch {
@@ -189,7 +192,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       }
     }
 
-    set({ tagIndex });
+    set({ tagIndex, fileContents });
   },
 
   buildEmbeddingIndex: async () => {

@@ -17,5 +17,8 @@ contextBridge.exposeInMainWorld('electron', {
     pdf: (options: any) => ipcRenderer.invoke('export:pdf', options),
     slides: (options: any) => ipcRenderer.invoke('export:slides', options),
     site: (options: any) => ipcRenderer.invoke('export:site', options),
-  }
+  },
+  shell: {
+    openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
+  },
 });
