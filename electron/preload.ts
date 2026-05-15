@@ -13,5 +13,7 @@ contextBridge.exposeInMainWorld('electron', {
   },
   export: {
     pdf: (options: any) => ipcRenderer.invoke('export:pdf', options),
+    slides: (options: any) => ipcRenderer.invoke('export:slides', options),
+    site: (options: any) => ipcRenderer.invoke('export:site', options),
   }
 });

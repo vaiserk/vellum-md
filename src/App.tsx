@@ -72,9 +72,9 @@ function App() {
         setSettingsOpen(!settingsOpen);
       }
       if (e.key === 'Escape') {
-        if (commandPaletteOpen) setCommandPaletteOpen(false);
-        if (settingsOpen) setSettingsOpen(false);
-        if (exportOpen) setExportOpen(false);
+        if (commandPaletteOpen) { e.preventDefault(); setCommandPaletteOpen(false); }
+        else if (settingsOpen) { e.preventDefault(); setSettingsOpen(false); }
+        else if (exportOpen) { e.preventDefault(); setExportOpen(false); }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
