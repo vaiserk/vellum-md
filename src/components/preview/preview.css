@@ -174,6 +174,15 @@
 .markdown-preview .wikilink:hover {
   opacity: 0.8;
 }
+.markdown-preview .wikilink-missing {
+  color: var(--error-color, #e06c75);
+  border-bottom: 1px dashed var(--error-color, #e06c75);
+  cursor: pointer;
+  opacity: 0.8;
+}
+.markdown-preview .wikilink-missing:hover {
+  opacity: 1;
+}
 
 /* KaTeX display math centering */
 .markdown-preview .katex-display {

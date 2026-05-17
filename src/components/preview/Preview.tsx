@@ -139,7 +139,19 @@ function rehypeTaskCheckboxIndex() {
 }
 
 export function Preview() {
-  const { activeContent, theme, editorView, setActiveContent, activeFile } = useVaultStore();
+  const { activeContent, theme, editorView, setActiveContent, activeFile, files } = useVaultStore();
+  const knownNotes = useMemo(() => {
+    const set = new Set<string>();
+    const walk = (nodes: any[]) => {
+      for (const n of nodes) {
+        if (n.type === 'file') set.add(n.name.replace(/\.md$/i, '').toLowerCase());
+        if (n.children) walk(n.children);
+      }
+    };
+    walk(files);
+    return set;
+  }, [files]);
+
   const previewRef = useRef<HTMLDivElement>(null);
   const syncSourceRef = useRef<'editor' | 'preview' | null>(null);
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
@@ -238,9 +250,19 @@ export function Preview() {
             span: (props: any) => {
               if (props.className === 'wikilink') {
                 const noteName: string = props['data-note'] || '';
-                return <span {...props} onClick={() => {
-                  if (noteName) window.dispatchEvent(new CustomEvent('vellum:open-note', { detail: { name: noteName } }));
-                }}>{props.children}</span>;
+                const exists = knownNotes.has(noteName.toLowerCase());
+                return (
+                  <span
+                    {...props}
+                    className={exists ? 'wikilink' : 'wikilink-missing'}
+                    title={exists ? `Abrir: ${noteName}` : `Nota não encontrada: ${noteName}`}
+                    onClick={() => {
+                      if (noteName) window.dispatchEvent(new CustomEvent('vellum:open-note', { detail: { name: noteName } }));
+                    }}
+                  >
+                    {props.children}
+                  </span>
+                );
               }
               return <span {...props} />;
             }
@@ -252,7 +274,7 @@ export function Preview() {
       console.error(e);
       return <div>Error rendering preview</div>;
     }
-  }, [activeContent, theme, toggleCheckbox]);
+  }, [activeContent, theme, toggleCheckbox, knownNotes]);
 
   return (
     <div ref={previewRef} className="markdown-preview">

@@ -280,6 +280,25 @@ body {
 .save-indicator.saving { color: var(--saving-color); }
 .save-indicator.error { color: var(--error-color); }
 
+.undo-delete-banner {
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.undo-delete-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  padding: 1px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  height: 18px;
+  line-height: 18px;
+}
+.undo-delete-btn:hover { opacity: 0.85; }
+
 /* ===== Buttons (base) ===== */
 button {
   background: var(--accent);

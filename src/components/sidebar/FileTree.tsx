@@ -87,8 +87,9 @@ export function FileTree() {
     const confirm = await useVaultStore.getState().openConfirm(`Tem certeza que deseja excluir '${file.name}'?`);
     
     if (confirm) {
+      const { vaultPath, setFiles, setLastDeleted } = useVaultStore.getState();
+      setLastDeleted({ name: file.name, path: file.path });
       await window.electron.fs.deleteFile(file.path);
-      const { vaultPath, setFiles } = useVaultStore.getState();
       if (vaultPath) {
         const updatedFiles = await window.electron.fs.readDir(vaultPath);
         setFiles(updatedFiles);

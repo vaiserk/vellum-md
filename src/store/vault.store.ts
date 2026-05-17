@@ -86,6 +86,8 @@ interface VaultState {
   cycleLayoutMode: () => void;
   newNoteModalOpen: boolean;
   setNewNoteModalOpen: (open: boolean) => void;
+  lastDeleted: { name: string; path: string } | null;
+  setLastDeleted: (info: { name: string; path: string } | null) => void;
   buildEmbeddingIndex: () => Promise<void>;
   loadTagsOnly: () => Promise<void>;
 }
@@ -107,6 +109,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   confirmModal: null,
   aiMessages: [],
   newNoteModalOpen: false,
+  lastDeleted: null,
   embeddingIndex: new Map(),
   passageIndex: new Map(),
   tagIndex: new Map(),
@@ -115,6 +118,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   indexingProgress: { current: 0, total: 0 },
 
   setNewNoteModalOpen: (open) => set({ newNoteModalOpen: open }),
+  setLastDeleted: (info) => set({ lastDeleted: info }),
   setVaultPath: (path) => set({ vaultPath: path }),
   setFiles: (files) => set({ files }),
   setActiveFile: (path, content = '') => set({ activeFile: path, activeContent: content }),

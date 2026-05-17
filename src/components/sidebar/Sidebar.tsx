@@ -136,14 +136,11 @@ export function Sidebar() {
   const handleFileClick = async (file: FileNode) => {
     const content = await window.electron.fs.readFile(file.path);
     setActiveFile(file.path, content);
-    setSearchQuery('');
   };
 
   const handleResultClick = async (path: string) => {
     const content = await window.electron.fs.readFile(path);
     setActiveFile(path, content);
-    setSearchQuery('');
-    setSemanticResults([]);
   };
 
   // Merge lexical + semantic into a single ranked list (lexical has priority; duplicates skipped)

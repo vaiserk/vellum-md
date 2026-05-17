@@ -1,8 +1,27 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { useVaultStore } from '../../store/vault.store';
 
 export function StatusBar() {
-  const { activeContent, cursorPosition, saveStatus, layoutMode, typewriterMode } = useVaultStore();
+  const { activeContent, cursorPosition, saveStatus, layoutMode, typewriterMode, lastDeleted, setLastDeleted, vaultPath } = useVaultStore();
+  const [undoCountdown, setUndoCountdown] = React.useState(10);
+
+  useEffect(() => {
+    if (!lastDeleted) {
+      setUndoCountdown(10);
+      return;
+    }
+    setUndoCountdown(10);
+    let remaining = 10;
+    const interval = setInterval(() => {
+      remaining -= 1;
+      setUndoCountdown(remaining);
+      if (remaining <= 0) {
+        clearInterval(interval);
+        setLastDeleted(null);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lastDeleted]);
 
   const { words, chars, readTime } = useMemo(() => {
     const text = activeContent || '';
@@ -34,15 +53,36 @@ export function StatusBar() {
     'preview-only': 'Preview',
   }[layoutMode];
 
+  const handleUndoDelete = async () => {
+    if (!vaultPath) return;
+    const ok = await window.electron.fs.restoreLastDeleted(vaultPath);
+    if (ok) {
+      const updatedFiles = await window.electron.fs.readDir(vaultPath);
+      useVaultStore.getState().setFiles(updatedFiles);
+    }
+    setLastDeleted(null);
+  };
+
   return (
     <div className="status-bar">
       <div className="status-left">
-        <span className="status-item">
-          {words} palavras | {chars} caracteres | ~{readTime} min
-        </span>
-        <span className="status-item">
-          Ln {cursorPosition.line}, Col {cursorPosition.col}
-        </span>
+        {lastDeleted ? (
+          <span className="status-item undo-delete-banner">
+            '{lastDeleted.name}' excluído
+            <button className="undo-delete-btn" onClick={handleUndoDelete}>
+              ↩ Desfazer ({undoCountdown}s)
+            </button>
+          </span>
+        ) : (
+          <>
+            <span className="status-item">
+              {words} palavras | {chars} caracteres | ~{readTime} min
+            </span>
+            <span className="status-item">
+              Ln {cursorPosition.line}, Col {cursorPosition.col}
+            </span>
+          </>
+        )}
       </div>
       <div className="status-right">
         {saveStatus !== 'idle' && (

@@ -123,13 +123,6 @@ export function SettingsModal() {
               </select>
             </div>
 
-            <div className="settings-row">
-              <label>Sugestão de conexões</label>
-              <input 
-                type="checkbox" checked={settings.suggestConnections}
-                onChange={e => settings.setSuggestConnections(e.target.checked)}
-              />
-            </div>
           </div>
 
           {/* Export Section */}
@@ -203,7 +196,12 @@ export function SettingsModal() {
             </div>
 
             <div className="settings-row">
-              <label>Sugestão de conexões</label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <span>Sugerir links automaticamente</span>
+                <span style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>
+                  Sugere wikilinks enquanto você escreve, usando embeddings
+                </span>
+              </label>
               <input
                 type="checkbox"
                 checked={settings.suggestConnections}

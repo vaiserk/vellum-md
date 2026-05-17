@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Sidebar } from './components/sidebar/Sidebar';
 import { Editor } from './components/editor/Editor';
 import { Preview } from './components/preview/Preview';
@@ -24,20 +24,15 @@ function App() {
     return !localStorage.getItem('vellum-onboarding-done');
   });
 
-  // Track which vault path has already had its embedding index built
-  const indexedVaultRef = useRef<string | null>(null);
-
-  // Re-run loadTagsOnly whenever files change so fileContents stays current for lexical search.
-  // Build the embedding index once per vault open (guarded by the ref).
+  // Re-run loadTagsOnly whenever files change (keeps fileContents current for lexical search).
+  // Re-run buildEmbeddingIndex when files change so newly created/modified notes get indexed;
+  // the cache skips unchanged files, so only truly new/modified notes cost API calls.
   useEffect(() => {
     if (!vaultPath || files.length === 0) return;
     loadTagsOnly();
-    if (indexedVaultRef.current !== vaultPath) {
-      indexedVaultRef.current = vaultPath;
-      const hasKey = embeddingApiKey || apiKey;
-      if (suggestConnections && hasKey) {
-        buildEmbeddingIndex();
-      }
+    const hasKey = embeddingApiKey || apiKey;
+    if (suggestConnections && hasKey) {
+      buildEmbeddingIndex();
     }
   }, [vaultPath, files]);
 
