@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { EmbeddingService, extractTags } from '../services/embedding.service';
+import { EmbeddingService, extractTags, splitIntoPassages } from '../services/embedding.service';
 import { useSettingsStore } from './settings.store';
 
 export interface AIMessage {
@@ -59,6 +59,7 @@ interface VaultState {
 
   // Semantic index
   embeddingIndex: Map<string, number[]>;
+  passageIndex: Map<string, { text: string; embedding: number[] }[]>;
   tagIndex: Map<string, string[]>;
   fileContents: Map<string, string>;
   embeddingStatus: EmbeddingStatus;
@@ -83,6 +84,8 @@ interface VaultState {
   openConfirm: (message: string) => Promise<boolean>;
   closeConfirm: () => void;
   cycleLayoutMode: () => void;
+  newNoteModalOpen: boolean;
+  setNewNoteModalOpen: (open: boolean) => void;
   buildEmbeddingIndex: () => Promise<void>;
   loadTagsOnly: () => Promise<void>;
 }
@@ -103,12 +106,15 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   promptModal: null,
   confirmModal: null,
   aiMessages: [],
+  newNoteModalOpen: false,
   embeddingIndex: new Map(),
+  passageIndex: new Map(),
   tagIndex: new Map(),
   fileContents: new Map(),
   embeddingStatus: 'idle',
   indexingProgress: { current: 0, total: 0 },
 
+  setNewNoteModalOpen: (open) => set({ newNoteModalOpen: open }),
   setVaultPath: (path) => set({ vaultPath: path }),
   setFiles: (files) => set({ files }),
   setActiveFile: (path, content = '') => set({ activeFile: path, activeContent: content }),
@@ -216,6 +222,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       set({ indexingProgress: { current: 0, total: mdFiles.length } });
 
       const embeddingIndex = new Map<string, number[]>();
+      const passageIndex = new Map<string, { text: string; embedding: number[] }[]>();
       const tagIndex = new Map<string, string[]>();
 
       for (let i = 0; i < mdFiles.length; i++) {
@@ -234,11 +241,13 @@ export const useVaultStore = create<VaultState>((set, get) => ({
         const tags = extractTags(content);
         if (tags.length > 0) tagIndex.set(file.path, tags);
 
-        // Reuse cached embedding if file hasn't changed
-        if (cached && cached.mtime === file.mtime) {
+        // Reuse cached embedding + passages if file hasn't changed and passages are stored
+        if (cached && cached.mtime === file.mtime && cached.passages) {
           embeddingIndex.set(file.path, cached.embedding);
+          passageIndex.set(file.path, cached.passages);
         } else {
           try {
+            // Embed the full document
             const embedding = await EmbeddingService.embed(
               content,
               settings.embeddingProvider,
@@ -246,9 +255,28 @@ export const useVaultStore = create<VaultState>((set, get) => ({
               effectiveKey
             );
             embeddingIndex.set(file.path, embedding);
-            entries[file.path] = { mtime: file.mtime, embedding };
-            // Small delay to respect API rate limits
             await new Promise(r => setTimeout(r, 50));
+
+            // Embed each passage for chunk-level retrieval
+            const rawPassages = splitIntoPassages(content);
+            const embeddedPassages: { text: string; embedding: number[] }[] = [];
+            for (const passageText of rawPassages) {
+              try {
+                const passageEmb = await EmbeddingService.embed(
+                  passageText,
+                  settings.embeddingProvider,
+                  settings.embeddingModel,
+                  effectiveKey
+                );
+                embeddedPassages.push({ text: passageText, embedding: passageEmb });
+                await new Promise(r => setTimeout(r, 50));
+              } catch {
+                // skip passages that fail to embed
+              }
+            }
+
+            passageIndex.set(file.path, embeddedPassages);
+            entries[file.path] = { mtime: file.mtime, embedding, passages: embeddedPassages };
           } catch (e) {
             console.error(`Embedding failed for ${file.name}:`, e);
           }
@@ -265,7 +293,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       };
       await window.electron.fs.writeEmbeddingCache(vaultPath, updatedCache);
 
-      set({ embeddingIndex, tagIndex, embeddingStatus: 'ready' });
+      set({ embeddingIndex, passageIndex, tagIndex, embeddingStatus: 'ready' });
     } catch (e) {
       console.error('buildEmbeddingIndex error:', e);
       set({ embeddingStatus: 'error' });

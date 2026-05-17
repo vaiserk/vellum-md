@@ -29,6 +29,7 @@ declare global {
   interface EmbeddingCacheEntry {
     mtime: number;
     embedding: number[];
+    passages?: { text: string; embedding: number[] }[];
   }
 
   interface EmbeddingCache {

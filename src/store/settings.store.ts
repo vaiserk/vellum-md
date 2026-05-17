@@ -96,7 +96,7 @@ export const useSettingsStore = create<SettingsState>()(
       aiEnabled: false,
       suggestConnections: true,
       embeddingProvider: 'google',
-      embeddingModel: 'text-embedding-004',
+      embeddingModel: 'gemini-embedding-2-preview',
       embeddingApiKey: '',
       fontSize: 16,
       fontFamily: 'Inter',

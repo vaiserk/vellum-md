@@ -9,8 +9,8 @@ export interface EmbeddingProviderInfo {
 export const embeddingProviders: Record<EmbeddingProviderKey, EmbeddingProviderInfo> = {
   google: {
     name: 'Google (Gemini)',
-    defaultModel: 'text-embedding-004',
-    availableModels: ['text-embedding-004'],
+    defaultModel: 'gemini-embedding-2-preview',
+    availableModels: ['gemini-embedding-2-preview', 'text-embedding-004'],
   },
   openai: {
     name: 'OpenAI',
@@ -50,6 +50,58 @@ export function cleanMarkdown(content: string): string {
   // Collapse whitespace
   text = text.replace(/\s+/g, ' ').trim();
   return text.slice(0, MAX_TEXT_CHARS);
+}
+
+// Split note content into semantically coherent passages for chunk-level indexing.
+// Splits on paragraph breaks first, then merges short chunks and caps each at maxLen chars.
+export function splitIntoPassages(content: string, maxLen = 350): string[] {
+  const body = content.replace(/^---[\s\S]*?---\n?/, '');
+  const rawParagraphs = body.split(/\n{2,}/).map(p => p.trim()).filter(p => p.length > 0);
+
+  const clean = (para: string): string =>
+    para
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/`[^`]*`/g, '')
+      .replace(/\$\$[\s\S]*?\$\$/g, '')
+      .replace(/\$[^$\n]+\$/g, '')
+      .replace(/!\[([^\]]*)\]\([^\)]*\)/g, '')
+      .replace(/\[([^\]]*)\]\([^\)]*\)/g, '$1')
+      .replace(/\[\[([^\]|]*)\|?[^\]]*\]\]/g, '$1')
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/[*_]{1,3}([^*_\n]*)[*_]{1,3}/g, '$1')
+      .replace(/^>\s*/gm, '')
+      .replace(/^[-*_]{3,}\s*$/gm, '')
+      .replace(/<[^>]*>/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const passages: string[] = [];
+  let buffer = '';
+
+  for (const para of rawParagraphs) {
+    if (para.startsWith('```')) continue;
+    const cleaned = clean(para);
+    if (!cleaned || cleaned.length < 20) continue;
+
+    if (buffer.length + cleaned.length + 1 > maxLen && buffer) {
+      passages.push(buffer);
+      buffer = cleaned;
+    } else {
+      buffer = buffer ? `${buffer} ${cleaned}` : cleaned;
+    }
+  }
+  if (buffer.length >= 20) passages.push(buffer);
+
+  // Fallback: chunk the full cleaned text if no paragraphs were found
+  if (passages.length === 0) {
+    const full = cleanMarkdown(content);
+    for (let i = 0; i < full.length; i += maxLen) {
+      const chunk = full.slice(i, i + maxLen).trim();
+      if (chunk.length >= 20) passages.push(chunk);
+    }
+  }
+
+  return passages;
 }
 
 export function extractTags(content: string): string[] {

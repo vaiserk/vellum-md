@@ -5,7 +5,7 @@ import { FileTree } from './FileTree';
 import { BacklinksPane } from './BacklinksPane';
 import { Sun, Moon, FilePlus, Settings } from 'lucide-react';
 import { EmbeddingService } from '../../services/embedding.service';
-import { topKSimilar } from '../../services/similarity';
+import { topKSimilar, cosineSimilarity } from '../../services/similarity';
 
 type SidebarTab = 'files' | 'search' | 'tags' | 'backlinks';
 
@@ -13,17 +13,28 @@ interface SemanticResult {
   path: string;
   score: number;
   name: string;
+  bestPassage: string;
+}
+
+interface UnifiedResult {
+  path: string;
+  name: string;
+  type: 'lexical' | 'semantic';
+  snippet: string | null;
+  matchIdx: number;
+  matchLen: number;
+  score?: number;
 }
 
 export function Sidebar() {
   const {
     vaultPath, setVaultPath, setFiles, files, theme, setTheme, setActiveFile,
-    embeddingIndex, embeddingStatus, indexingProgress, tagIndex, fileContents, loadTagsOnly,
+    embeddingIndex, passageIndex, embeddingStatus, indexingProgress, tagIndex, fileContents, loadTagsOnly,
+    setNewNoteModalOpen,
   } = useVaultStore();
   const { setSettingsOpen, embeddingApiKey, apiKey, embeddingProvider, embeddingModel } = useSettingsStore();
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchMode, setSearchMode] = useState<'lexical' | 'semantic'>('lexical');
   const [semanticResults, setSemanticResults] = useState<SemanticResult[]>([]);
   const [semanticLoading, setSemanticLoading] = useState(false);
   const [activeTag, setActiveTag] = useState<string | null>(null);
@@ -32,22 +43,13 @@ export function Sidebar() {
   const handleOpenVault = async () => {
     const path = await window.electron.fs.openVault();
     if (path) {
-      setVaultPath(path);
       const newFiles = await window.electron.fs.readDir(path);
       setFiles(newFiles);
+      setVaultPath(path);
     }
   };
 
-  const handleCreateFile = async () => {
-    if (!vaultPath) return;
-    const inputName = await useVaultStore.getState().openPrompt('Nome da nova nota:', 'Nova Nota');
-    if (!inputName) return;
-    const name = inputName.endsWith('.md') ? inputName : `${inputName}.md`;
-    const filePath = vaultPath + '/' + name;
-    await window.electron.fs.createFile(filePath);
-    const updatedFiles = await window.electron.fs.readDir(vaultPath);
-    setFiles(updatedFiles);
-  };
+  const handleCreateFile = () => setNewNoteModalOpen(true);
 
   const handleToggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
@@ -74,9 +76,9 @@ export function Sidebar() {
       })
     : [];
 
-  // Semantic search with debounce
+  // Semantic search with debounce — always active when index is ready
   useEffect(() => {
-    if (searchMode !== 'semantic' || !searchQuery.trim() || embeddingStatus !== 'ready') {
+    if (!searchQuery.trim() || embeddingStatus !== 'ready') {
       setSemanticResults([]);
       return;
     }
@@ -97,11 +99,27 @@ export function Sidebar() {
         );
         const results = topKSimilar(queryEmbedding, embeddingIndex, 10).filter(r => r.score > 0.5);
         setSemanticResults(
-          results.map(r => ({
-            path: r.path,
-            score: r.score,
-            name: r.path.split(/[/\\]/).pop()?.replace(/\.md$/, '') ?? r.path,
-          }))
+          results.map(r => {
+            // Find the passage most similar to the query among this note's indexed passages
+            const passages = passageIndex.get(r.path) ?? [];
+            let bestPassage = '';
+            let bestScore = -1;
+            for (const p of passages) {
+              const s = cosineSimilarity(queryEmbedding, p.embedding);
+              if (s > bestScore) { bestScore = s; bestPassage = p.text; }
+            }
+            // Fallback to first body chars if note has no passage index yet
+            if (!bestPassage) {
+              const content = fileContents.get(r.path) ?? '';
+              bestPassage = content.replace(/^---[\s\S]*?---\n?/, '').trim().slice(0, 150).replace(/\n/g, ' ');
+            }
+            return {
+              path: r.path,
+              score: r.score,
+              name: r.path.split(/[/\\]/).pop()?.replace(/\.md$/, '') ?? r.path,
+              bestPassage,
+            };
+          })
         );
       } catch {
         setSemanticResults([]);
@@ -113,7 +131,7 @@ export function Sidebar() {
     return () => {
       if (semanticDebounce.current) clearTimeout(semanticDebounce.current);
     };
-  }, [searchQuery, searchMode, embeddingStatus, embeddingIndex]);
+  }, [searchQuery, embeddingStatus, embeddingIndex]);
 
   const handleFileClick = async (file: FileNode) => {
     const content = await window.electron.fs.readFile(file.path);
@@ -121,12 +139,47 @@ export function Sidebar() {
     setSearchQuery('');
   };
 
-  const handleSemanticResultClick = async (path: string) => {
+  const handleResultClick = async (path: string) => {
     const content = await window.electron.fs.readFile(path);
     setActiveFile(path, content);
     setSearchQuery('');
     setSemanticResults([]);
   };
+
+  // Merge lexical + semantic into a single ranked list (lexical has priority; duplicates skipped)
+  const unifiedResults: UnifiedResult[] = [];
+  if (searchQuery.trim()) {
+    const seen = new Set<string>();
+    const q = searchQuery.toLowerCase();
+
+    for (const file of lexicalResults) {
+      seen.add(file.path);
+      const nameMatch = file.name.toLowerCase().includes(q);
+      let snippet: string | null = null;
+      let matchIdx = -1;
+      let matchLen = 0;
+      if (!nameMatch) {
+        const content = fileContents.get(file.path) ?? '';
+        const idx = content.toLowerCase().indexOf(q);
+        if (idx !== -1) {
+          const start = Math.max(0, idx - 30);
+          const end = Math.min(content.length, idx + q.length + 60);
+          const prefix = start > 0 ? '…' : '';
+          snippet = prefix + content.slice(start, end).replace(/\n/g, ' ') + (end < content.length ? '…' : '');
+          matchIdx = (idx - start) + prefix.length;
+          matchLen = q.length;
+        }
+      }
+      unifiedResults.push({ type: 'lexical', path: file.path, name: file.name, snippet, matchIdx, matchLen });
+    }
+
+    for (const r of semanticResults) {
+      if (!seen.has(r.path)) {
+        seen.add(r.path);
+        unifiedResults.push({ type: 'semantic', path: r.path, name: r.name, score: r.score, snippet: r.bestPassage || null, matchIdx: -1, matchLen: 0 });
+      }
+    }
+  }
 
   // Build tag list from tagIndex
   const allTags = Array.from(
@@ -183,25 +236,6 @@ export function Sidebar() {
 
         {activeTab === 'search' && (
           <div className="search-pane">
-            {/* Mode toggle */}
-            <div className="search-mode-toggle">
-              <button
-                className={searchMode === 'lexical' ? 'active' : ''}
-                onClick={() => { setSearchMode('lexical'); setSemanticResults([]); }}
-                title="Busca por nome do arquivo"
-              >
-                Lexical
-              </button>
-              <button
-                className={searchMode === 'semantic' ? 'active' : ''}
-                onClick={() => setSearchMode('semantic')}
-                title="Busca por significado (requer indexação)"
-                disabled={embeddingStatus === 'idle'}
-              >
-                Semântica
-              </button>
-            </div>
-
             {/* Indexing progress */}
             {embeddingStatus === 'indexing' && (
               <div className="indexing-progress">
@@ -223,54 +257,54 @@ export function Sidebar() {
 
             <input
               className="search-input"
-              placeholder={searchMode === 'semantic' ? 'Buscar por significado...' : 'Buscar nota...'}
+              placeholder="Buscar notas..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
 
-            {/* Lexical results */}
-            {searchMode === 'lexical' && lexicalResults.map(file => {
-              const q = searchQuery.toLowerCase();
-              const nameMatch = file.name.toLowerCase().includes(q);
-              let snippet: string | null = null;
-              if (!nameMatch) {
-                const content = fileContents.get(file.path) ?? '';
-                const idx = content.toLowerCase().indexOf(q);
-                if (idx !== -1) {
-                  const start = Math.max(0, idx - 30);
-                  const end = Math.min(content.length, idx + q.length + 60);
-                  snippet = (start > 0 ? '…' : '') + content.slice(start, end).replace(/\n/g, ' ') + (end < content.length ? '…' : '');
-                }
-              }
-              return (
-                <div key={file.path} className="search-result" onClick={() => handleFileClick(file)}>
-                  <div className="search-result-title">📄 {file.name.replace('.md', '')}</div>
-                  {snippet && <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px', lineHeight: 1.4 }}>{snippet}</div>}
+            {/* Unified results */}
+            {semanticLoading && unifiedResults.length === 0 && (
+              <div style={{ padding: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>Buscando...</div>
+            )}
+
+            {unifiedResults.map(result => (
+              <div key={result.path} className="search-result" onClick={() => handleResultClick(result.path)}>
+                <div className="search-result-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    📄 {result.name.replace(/\.md$/, '')}
+                  </span>
+                  {result.type === 'semantic' && result.score !== undefined
+                    ? <span className="semantic-score-badge">{Math.round(result.score * 100)}%</span>
+                    : <span className="lexical-badge">Léxica</span>
+                  }
                 </div>
-              );
-            })}
-            {searchMode === 'lexical' && searchQuery && lexicalResults.length === 0 && (
+                {result.snippet && (
+                  <div className="search-result-snippet" style={{ marginTop: '3px', lineHeight: 1.4 }}>
+                    {result.matchIdx >= 0
+                      ? <>
+                          {result.snippet.slice(0, result.matchIdx)}
+                          <mark className="search-highlight">{result.snippet.slice(result.matchIdx, result.matchIdx + result.matchLen)}</mark>
+                          {result.snippet.slice(result.matchIdx + result.matchLen)}
+                        </>
+                      : result.snippet
+                    }
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {searchQuery && !semanticLoading && unifiedResults.length === 0 && (
               <div style={{ padding: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>Nenhum resultado</div>
             )}
 
-            {/* Semantic results */}
-            {searchMode === 'semantic' && semanticLoading && (
-              <div style={{ padding: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>Buscando...</div>
-            )}
-            {searchMode === 'semantic' && !semanticLoading && semanticResults.map(r => (
-              <div key={r.path} className="search-result" onClick={() => handleSemanticResultClick(r.path)}>
-                <div className="search-result-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>📄 {r.name}</span>
-                  <span className="semantic-score-badge">{Math.round(r.score * 100)}%</span>
-                </div>
+            {embeddingStatus !== 'ready' && embeddingStatus !== 'indexing' && (
+              <div style={{ padding: '8px', fontSize: '11px', color: 'var(--text-secondary)', borderTop: '1px solid var(--border-color)', marginTop: '4px' }}>
+                Busca semântica inativa — configure uma chave de embedding em Configurações.
               </div>
-            ))}
-            {searchMode === 'semantic' && searchQuery && !semanticLoading && semanticResults.length === 0 && embeddingStatus === 'ready' && (
-              <div style={{ padding: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>Nenhum resultado semântico</div>
             )}
-            {searchMode === 'semantic' && embeddingStatus !== 'ready' && embeddingStatus !== 'indexing' && (
-              <div style={{ padding: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                Configure a chave de embedding em Configurações para habilitar a busca semântica.
+            {embeddingStatus === 'ready' && embeddingIndex.size === 0 && (
+              <div style={{ padding: '8px', fontSize: '11px', color: 'var(--text-secondary)', borderTop: '1px solid var(--border-color)', marginTop: '4px' }}>
+                Índice semântico vazio — reindexe o vault nas Configurações.
               </div>
             )}
           </div>

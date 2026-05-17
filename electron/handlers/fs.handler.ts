@@ -57,10 +57,9 @@ export function setupFsHandlers(ipcMain: Electron.IpcMain, dialog: Electron.Dial
   });
 
   ipcMain.handle('fs:createFile', async (_, filePath: string) => {
+    if (fs.existsSync(filePath)) return false;
     const frontmatter = `---\ntitle: "Nova Nota"\ncreated: ${new Date().toISOString()}\nmodified: ${new Date().toISOString()}\ntags: []\naliases: []\n---\n\n`;
-    if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, frontmatter, 'utf-8');
-    }
+    fs.writeFileSync(filePath, frontmatter, 'utf-8');
     return true;
   });
 

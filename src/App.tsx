@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Sidebar } from './components/sidebar/Sidebar';
 import { Editor } from './components/editor/Editor';
 import { Preview } from './components/preview/Preview';
@@ -12,26 +12,34 @@ import { AIPanel } from './components/ai/AIPanel';
 import { LinkSuggestion } from './components/ai/LinkSuggestion';
 import { PromptModal } from './components/modals/PromptModal';
 import { ConfirmModal } from './components/modals/ConfirmModal';
+import { NewNoteModal } from './components/modals/NewNoteModal';
 import { useVaultStore } from './store/vault.store';
 import { useSettingsStore } from './store/settings.store';
 
 function App() {
-  const { vaultPath, theme, layoutMode, commandPaletteOpen, setCommandPaletteOpen, aiPanelOpen, setAiPanelOpen, buildEmbeddingIndex, loadTagsOnly } = useVaultStore();
+  const { vaultPath, files, theme, layoutMode, commandPaletteOpen, setCommandPaletteOpen, aiPanelOpen, setAiPanelOpen, buildEmbeddingIndex, loadTagsOnly } = useVaultStore();
   const { settingsOpen, setSettingsOpen, fontSize, fontFamily, editorMaxWidth, suggestConnections, embeddingApiKey, apiKey } = useSettingsStore();
   const [exportOpen, setExportOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem('vellum-onboarding-done');
   });
 
-  // Trigger tag loading and optional semantic indexing when vault opens
+  // Track which vault path has already had its embedding index built
+  const indexedVaultRef = useRef<string | null>(null);
+
+  // Re-run loadTagsOnly whenever files change so fileContents stays current for lexical search.
+  // Build the embedding index once per vault open (guarded by the ref).
   useEffect(() => {
-    if (!vaultPath) return;
+    if (!vaultPath || files.length === 0) return;
     loadTagsOnly();
-    const hasKey = embeddingApiKey || apiKey;
-    if (suggestConnections && hasKey) {
-      buildEmbeddingIndex();
+    if (indexedVaultRef.current !== vaultPath) {
+      indexedVaultRef.current = vaultPath;
+      const hasKey = embeddingApiKey || apiKey;
+      if (suggestConnections && hasKey) {
+        buildEmbeddingIndex();
+      }
     }
-  }, [vaultPath]);
+  }, [vaultPath, files]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -54,19 +62,7 @@ function App() {
       if (e.ctrlKey && !e.shiftKey && e.key === 'n') {
         e.preventDefault();
         const state = useVaultStore.getState();
-        if (state.vaultPath) {
-          state.openPrompt('Nome da nova nota:', 'Nova Nota').then(inputName => {
-            if (inputName) {
-              const name = inputName.endsWith('.md') ? inputName : `${inputName}.md`;
-              const filePath = state.vaultPath + '/' + name;
-              window.electron.fs.createFile(filePath).then(() => {
-                window.electron.fs.readDir(state.vaultPath!).then(files => {
-                  state.setFiles(files);
-                });
-              });
-            }
-          });
-        }
+        if (state.vaultPath) state.setNewNoteModalOpen(true);
       }
       if (e.ctrlKey && e.shiftKey && e.key === 'A') {
         e.preventDefault();
@@ -176,12 +172,11 @@ function App() {
           </p>
           <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
             <button onClick={() => {
-              window.electron.fs.openVault().then(path => {
+              window.electron.fs.openVault().then(async path => {
                 if (path) {
+                  const newFiles = await window.electron.fs.readDir(path);
+                  useVaultStore.getState().setFiles(newFiles);
                   useVaultStore.getState().setVaultPath(path);
-                  window.electron.fs.readDir(path).then(files => {
-                    useVaultStore.getState().setFiles(files);
-                  });
                 }
               });
             }}>
@@ -198,6 +193,7 @@ function App() {
       {exportOpen && <ExportModal onClose={() => setExportOpen(false)} />}
       <PromptModal />
       <ConfirmModal />
+      <NewNoteModal />
       {vaultPath && <LinkSuggestion />}
     </div>
   );
