@@ -11,22 +11,90 @@ import remarkRehype from 'remark-rehype';
 import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeStringify from 'rehype-stringify';
+import { visit } from 'unist-util-visit';
 import { SlideEditorModal } from './SlideEditorModal';
 
 type ExportTab = 'pdf' | 'slides' | 'site';
 
+// ─── Callouts plugin (> [!NOTE] syntax) ──────────────────────────────────────
+function remarkCallouts() {
+  return (tree: any) => {
+    visit(tree, 'blockquote', (node: any) => {
+      if (!node.children?.length) return;
+      const firstP = node.children[0];
+      if (firstP.type !== 'paragraph' || !firstP.children?.length) return;
+      const firstText = firstP.children[0];
+      if (firstText.type !== 'text') return;
+      const match = firstText.value.match(/^\[!(NOTE|TIP|WARNING|CAUTION|DANGER|IMPORTANT)\]/i);
+      if (!match) return;
+      const type = match[1].toLowerCase();
+      firstText.value = firstText.value.substring(match[0].length).trimStart();
+      node.data = node.data || {};
+      node.data.hName = 'div';
+      node.data.hProperties = { className: `callout callout-${type}` };
+      const icons: any = { note: 'ℹ️', tip: '💡', warning: '⚠️', caution: '🛑', danger: '🛑', important: '⭐' };
+      const titleText = type.charAt(0).toUpperCase() + type.slice(1);
+      node.children.unshift({
+        type: 'element',
+        data: { hName: 'div', hProperties: { className: 'callout-title' } },
+        children: [{ type: 'text', value: `${icons[type] || 'ℹ️'} ${titleText}` }]
+      });
+    });
+  };
+}
+
+// ─── Wikilink → anchor plugin (site export only) ─────────────────────────────
+function makeWikilinkPlugin(slugMap: Record<string, string>) {
+  return function remarkWikilinkLinks() {
+    return (tree: any) => {
+      visit(tree, 'text', (node: any, index: any, parent: any) => {
+        if (!parent || !node.value) return;
+        const regex = /\[\[([^\]]+)\]\]/g;
+        const matches = [...node.value.matchAll(regex)];
+        if (!matches.length) return;
+        const children: any[] = [];
+        let lastIndex = 0;
+        for (const match of matches) {
+          if (match.index > lastIndex) {
+            children.push({ type: 'text', value: node.value.slice(lastIndex, match.index) });
+          }
+          const noteName = match[1].trim();
+          const slug = slugMap[noteName.toLowerCase()];
+          if (slug) {
+            children.push({
+              type: 'element',
+              data: { hName: 'a', hProperties: { href: `${slug}.html`, className: 'wiki-link' } },
+              children: [{ type: 'text', value: noteName }],
+            });
+          } else {
+            children.push({ type: 'text', value: match[0] });
+          }
+          lastIndex = match.index + match[0].length;
+        }
+        if (lastIndex < node.value.length) {
+          children.push({ type: 'text', value: node.value.slice(lastIndex) });
+        }
+        parent.children.splice(index, 1, ...children);
+      });
+    };
+  };
+}
+
 // ─── Markdown → HTML (unified pipeline) ─────────────────────────────────────
-async function mdToHtml(markdown: string): Promise<string> {
-  const processor = unified()
+async function mdToHtml(markdown: string, extraPlugin?: () => any): Promise<string> {
+  const proc = unified()
     .use(remarkParse)
     .use(remarkFrontmatter, ['yaml', 'toml'])
     .use(remarkGfm)
     .use(remarkMath)
+    .use(remarkCallouts);
+  if (extraPlugin) proc.use(extraPlugin);
+  proc
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeKatex)
     .use(rehypeHighlight)
     .use(rehypeStringify);
-  const file = await processor.process(markdown);
+  const file = await proc.process(markdown);
   return String(file);
 }
 
@@ -125,10 +193,17 @@ export function ExportModal({ onClose }: { onClose: () => void }) {
         return;
       }
 
+      // Build slug map so wikilinks resolve to correct page URLs
+      const slugMap: Record<string, string> = {};
+      for (const f of mdFiles) {
+        slugMap[f.name.toLowerCase()] = toSlug(f.name);
+      }
+      const wikilinkPlugin = makeWikilinkPlugin(slugMap);
+
       const pages: Array<{ title: string; slug: string; html: string }> = [];
       for (const f of mdFiles) {
         const content = await window.electron.fs.readFile(f.path);
-        const html = await mdToHtml(content);
+        const html = await mdToHtml(content, wikilinkPlugin);
         pages.push({
           title: f.name,
           slug: toSlug(f.name),
