@@ -228,6 +228,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       const embeddingIndex = new Map<string, number[]>();
       const passageIndex = new Map<string, { text: string; embedding: number[] }[]>();
       const tagIndex = new Map<string, string[]>();
+      const fileContents = new Map<string, string>();
 
       for (let i = 0; i < mdFiles.length; i++) {
         const file = mdFiles[i];
@@ -242,6 +243,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
           continue;
         }
 
+        fileContents.set(file.path, content);
         const tags = extractTags(content);
         if (tags.length > 0) tagIndex.set(file.path, tags);
 
@@ -297,7 +299,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       };
       await window.electron.fs.writeEmbeddingCache(vaultPath, updatedCache);
 
-      set({ embeddingIndex, passageIndex, tagIndex, embeddingStatus: 'ready' });
+      set({ embeddingIndex, passageIndex, tagIndex, fileContents, embeddingStatus: 'ready' });
     } catch (e) {
       console.error('buildEmbeddingIndex error:', e);
       set({ embeddingStatus: 'error' });

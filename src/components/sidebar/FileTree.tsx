@@ -1,11 +1,11 @@
-import React from 'react';
+import { useState, useEffect, MouseEvent } from 'react';
 import { useVaultStore, FileNode } from '../../store/vault.store';
 import { File, Folder } from 'lucide-react';
 
 export function FileTree() {
-  const { files, activeFile, setActiveFile, setActiveContent } = useVaultStore();
+  const { files, activeFile, setActiveFile } = useVaultStore();
 
-  const [contextMenu, setContextMenu] = React.useState<{ x: number, y: number, file: FileNode } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, file: FileNode } | null>(null);
 
   const handleFileClick = async (file: FileNode) => {
     if (file.type === 'file') {
@@ -20,7 +20,7 @@ export function FileTree() {
     }
   };
 
-  const handleContextMenu = (e: React.MouseEvent, file: FileNode) => {
+  const handleContextMenu = (e: MouseEvent, file: FileNode) => {
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({ x: e.clientX, y: e.clientY, file });
@@ -46,7 +46,7 @@ export function FileTree() {
       
       if (success) {
         const baseNewName = newName.replace('.md', '');
-        const { vaultPath, setFiles, files } = useVaultStore.getState();
+        const { vaultPath, setFiles } = useVaultStore.getState();
         
         if (vaultPath) {
           // Get the new file structure FIRST
@@ -101,7 +101,7 @@ export function FileTree() {
   };
 
   // Close context menu on click outside
-  React.useEffect(() => {
+  useEffect(() => {
     const handleClickOutside = () => setContextMenu(null);
     window.addEventListener('click', handleClickOutside);
     return () => window.removeEventListener('click', handleClickOutside);
@@ -133,35 +133,9 @@ export function FileTree() {
       {renderTree(files)}
       
       {contextMenu && (
-        <div 
-          className="context-menu" 
-          style={{ 
-            position: 'fixed', 
-            top: contextMenu.y, 
-            left: contextMenu.x,
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '6px',
-            padding: '4px',
-            zIndex: 1000,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            minWidth: '120px'
-          }}
-        >
-          <div 
-            className="context-menu-item" 
-            onClick={handleRename}
-            style={{ padding: '6px 12px', cursor: 'pointer', fontSize: '13px', borderRadius: '4px' }}
-          >
-            ✏️ Renomear
-          </div>
-          <div 
-            className="context-menu-item" 
-            onClick={handleDelete}
-            style={{ padding: '6px 12px', cursor: 'pointer', fontSize: '13px', color: '#ff4d4f', borderRadius: '4px' }}
-          >
-            🗑️ Excluir
-          </div>
+        <div className="context-menu" style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x }}>
+          <div className="context-menu-item" onClick={handleRename}>✏️ Renomear</div>
+          <div className="context-menu-item context-menu-item--danger" onClick={handleDelete}>🗑️ Excluir</div>
         </div>
       )}
     </div>

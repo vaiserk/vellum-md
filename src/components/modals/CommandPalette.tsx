@@ -13,9 +13,9 @@ export function CommandPalette() {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { 
+  const {
     setCommandPaletteOpen, cycleLayoutMode, setTheme, theme,
-    editorView, vaultPath, setFiles
+    editorView, vaultPath, setFiles,
   } = useVaultStore();
 
   const commands: Command[] = useMemo(() => [
@@ -25,16 +25,8 @@ export function CommandPalette() {
       label: 'Nova Nota',
       category: 'Arquivo',
       shortcut: 'Ctrl+N',
-      action: async () => {
-        if (!vaultPath) return;
-        const state = useVaultStore.getState();
-        const inputName = await state.openPrompt('Nome da nova nota:', 'Nova Nota');
-        if (!inputName) { close(); return; }
-        const name = inputName.endsWith('.md') ? inputName : `${inputName}.md`;
-        const filePath = vaultPath + '/' + name;
-        await window.electron.fs.createFile(filePath);
-        const files = await window.electron.fs.readDir(vaultPath);
-        setFiles(files);
+      action: () => {
+        useVaultStore.getState().setNewNoteModalOpen(true);
         close();
       }
     },

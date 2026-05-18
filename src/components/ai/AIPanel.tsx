@@ -1,8 +1,33 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, ReactElement, KeyboardEvent } from 'react';
+import { unified } from 'unified';
+import remarkParse from 'remark-parse';
+import remarkGfm from 'remark-gfm';
+import remarkRehype from 'remark-rehype';
+import rehypeHighlight from 'rehype-highlight';
+import rehypeReact from 'rehype-react';
+import * as prod from 'react/jsx-runtime';
 import { useVaultStore, AIMessage } from '../../store/vault.store';
 import { useSettingsStore } from '../../store/settings.store';
 import { AIService } from '../../services/ai.service';
 import { Send, Sparkles, FileText, CheckCircle, LayoutList, HelpCircle, CreditCard, X, Trash2 } from 'lucide-react';
+
+function MarkdownContent({ content }: { content: string }) {
+  const rendered = useMemo(() => {
+    try {
+      return unified()
+        .use(remarkParse)
+        .use(remarkGfm)
+        .use(remarkRehype)
+        .use(rehypeHighlight)
+        .use(rehypeReact, { ...prod } as any)
+        .processSync(content).result as ReactElement;
+    } catch {
+      return <span>{content}</span>;
+    }
+  }, [content]);
+
+  return <div className="ai-markdown">{rendered}</div>;
+}
 
 const quickActions = [
   { label: 'Expandir', icon: <Sparkles size={14} />, prompt: 'Expanda o parágrafo selecionado com mais detalhes e exemplos' },
@@ -89,7 +114,7 @@ Responda sempre em português. Seja conciso e direto. Ao sugerir texto, formate 
     editorView.focus();
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage(input);
@@ -134,9 +159,12 @@ Responda sempre em português. Seja conciso e direto. Ao sugerir texto, formate 
         )}
         {aiMessages.map((msg, i) => (
           <div key={i} className={`ai-message ai-message-${msg.role}`}>
-            <div className="ai-message-content">{msg.content}</div>
+            {msg.role === 'assistant'
+              ? <MarkdownContent content={msg.content} />
+              : <div className="ai-message-content">{msg.content}</div>
+            }
             {msg.role === 'assistant' && (
-              <button 
+              <button
                 className="ai-insert-btn"
                 onClick={() => insertInEditor(msg.content)}
                 title="Inserir no editor"
@@ -148,7 +176,7 @@ Responda sempre em português. Seja conciso e direto. Ao sugerir texto, formate 
         ))}
         {streamingText && (
           <div className="ai-message ai-message-assistant">
-            <div className="ai-message-content">{streamingText}</div>
+            <MarkdownContent content={streamingText} />
           </div>
         )}
         {loading && !streamingText && (

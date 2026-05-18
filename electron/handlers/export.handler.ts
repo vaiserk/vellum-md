@@ -275,7 +275,7 @@ export function setupExportHandlers() {
         .map(p => `<li><a href="${p.slug}.html">${p.title}</a></li>`)
         .join('\n');
 
-      const buildPageHtml = (page: { title: string; slug: string; html: string }, isIndex = false) => `<!DOCTYPE html>
+      const buildPageHtml = (page: { title: string; slug: string; html: string }) => `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">

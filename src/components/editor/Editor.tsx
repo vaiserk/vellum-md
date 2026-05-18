@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { EditorState } from '@codemirror/state';
+import { useEffect, useRef } from 'react';
+import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
@@ -7,6 +7,7 @@ import { bracketMatching } from '@codemirror/language';
 import { closeBrackets } from '@codemirror/autocomplete';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { useVaultStore } from '../../store/vault.store';
+import { useSettingsStore } from '../../store/settings.store';
 import { wikilinkHighlighter } from './extensions/wikilink.ext';
 import { typewriterExtension, toggleTypewriter } from './extensions/typewriter.ext';
 import { slashCommandsExtension } from './extensions/slash-commands.ext';
@@ -15,11 +16,20 @@ import { aiContextMenuExtension } from './extensions/ai-context-menu.ext';
 export function Editor() {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView>();
+  const lineNumbersCompartment = useRef(new Compartment());
   const {
     activeFile, activeContent, setActiveContent, setEditorView,
     setSaveStatus, setCursorPosition,
   } = useVaultStore();
+  const { showLineNumbers, autoSaveDelay } = useSettingsStore();
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Refs let the auto-save closure always see the latest values without
+  // being included in the editor setup effect's dependency array.
+  const autoSaveDelayRef = useRef(autoSaveDelay);
+  autoSaveDelayRef.current = autoSaveDelay;
+  const activeFileRef = useRef(activeFile);
+  activeFileRef.current = activeFile;
 
   useEffect(() => {
     if (!editorRef.current) return;
@@ -29,22 +39,21 @@ export function Editor() {
         const content = update.state.doc.toString();
         setActiveContent(content);
         setSaveStatus('saving');
-        
-        // Auto-save debounce (800ms per spec)
+
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = setTimeout(async () => {
-          if (activeFile) {
+          const file = activeFileRef.current;
+          if (file) {
             try {
-              await window.electron.fs.writeFile(activeFile, content);
+              await window.electron.fs.writeFile(file, content);
               setSaveStatus('saved');
-            } catch (e) {
+            } catch {
               setSaveStatus('error');
             }
           }
-        }, 800);
+        }, autoSaveDelayRef.current);
       }
-      
-      // Update cursor position
+
       if (update.selectionSet || update.docChanged) {
         const pos = update.state.selection.main.head;
         const line = update.state.doc.lineAt(pos);
@@ -52,7 +61,6 @@ export function Editor() {
       }
     });
 
-    // Custom keybindings
     const vellumKeymap = keymap.of([
       {
         key: 'Ctrl-b',
@@ -104,13 +112,13 @@ export function Editor() {
       {
         key: 'Ctrl-s',
         run: (view) => {
-          // Manual save
           const content = view.state.doc.toString();
-          if (activeFile) {
+          const file = activeFileRef.current;
+          if (file) {
             setSaveStatus('saving');
-            window.electron.fs.writeFile(activeFile, content).then(() => {
-              setSaveStatus('saved');
-            }).catch(() => setSaveStatus('error'));
+            window.electron.fs.writeFile(file, content)
+              .then(() => setSaveStatus('saved'))
+              .catch(() => setSaveStatus('error'));
           }
           return true;
         }
@@ -142,7 +150,7 @@ export function Editor() {
     const state = EditorState.create({
       doc: activeContent,
       extensions: [
-        lineNumbers(),
+        lineNumbersCompartment.current.of(showLineNumbers ? lineNumbers() : []),
         history(),
         bracketMatching(),
         closeBrackets(),
@@ -159,11 +167,7 @@ export function Editor() {
       ],
     });
 
-    const view = new EditorView({
-      state,
-      parent: editorRef.current,
-    });
-
+    const view = new EditorView({ state, parent: editorRef.current });
     viewRef.current = view;
     setEditorView(view);
 
@@ -173,6 +177,27 @@ export function Editor() {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, [activeFile]);
+
+  // Reactively toggle line numbers without rebuilding the editor
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: lineNumbersCompartment.current.reconfigure(showLineNumbers ? lineNumbers() : []),
+    });
+  }, [showLineNumbers]);
+
+  // Sync external content changes (e.g., checkbox toggles from Preview)
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const docContent = view.state.doc.toString();
+    if (docContent !== activeContent) {
+      view.dispatch({
+        changes: { from: 0, to: docContent.length, insert: activeContent },
+      });
+    }
+  }, [activeContent]);
 
   if (!activeFile) {
     return (

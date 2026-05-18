@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Sidebar } from './components/sidebar/Sidebar';
 import { Editor } from './components/editor/Editor';
 import { Preview } from './components/preview/Preview';

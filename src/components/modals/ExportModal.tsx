@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useVaultStore } from '../../store/vault.store';
 import { useSettingsStore } from '../../store/settings.store';
 import { X, FileText, Presentation, Globe, Download, Loader } from 'lucide-react';
@@ -24,7 +24,7 @@ async function mdToHtml(markdown: string): Promise<string> {
     .use(remarkMath)
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeKatex)
-    .use(rehypeHighlight, { ignoreMissing: true })
+    .use(rehypeHighlight)
     .use(rehypeStringify);
   const file = await processor.process(markdown);
   return String(file);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useSettingsStore } from '../../store/settings.store';
 import { useVaultStore } from '../../store/vault.store';
 import { AIService } from '../../services/ai.service';

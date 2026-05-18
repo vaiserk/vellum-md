@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useVaultStore, FileNode } from '../../store/vault.store';
 import { useSettingsStore } from '../../store/settings.store';
 import { FileTree } from './FileTree';
