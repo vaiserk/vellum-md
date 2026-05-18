@@ -159,6 +159,7 @@ export function Editor() {
         vellumKeymap,
         markdown(),
         EditorView.lineWrapping,
+        EditorView.contentAttributes.of({ spellcheck: 'true' }),
         wikilinkHighlighter,
         ...typewriterExtension,
         slashCommandsExtension,
