@@ -17,11 +17,13 @@ export function LinkSuggestion() {
   const [visible, setVisible] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFileRef = useRef<string | null>(null);
+  const generationRef = useRef(0);
 
   // Reset toast when changing files
   useEffect(() => {
     if (activeFile !== lastFileRef.current) {
       lastFileRef.current = activeFile;
+      generationRef.current++;
       setVisible(false);
       setSuggestions([]);
     }
@@ -31,6 +33,8 @@ export function LinkSuggestion() {
     if (!suggestConnections || embeddingStatus !== 'ready' || !activeContent || !activeFile) return;
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    const generation = ++generationRef.current;
 
     debounceRef.current = setTimeout(async () => {
       const queryText = activeContent.slice(-400);
@@ -44,8 +48,13 @@ export function LinkSuggestion() {
           queryText,
           embeddingProvider,
           embeddingModel,
-          effectiveKey
+          effectiveKey,
+          'query'
         );
+
+        // Discard results if a newer request has started or the file changed
+        // while this one was in flight (avoids showing stale suggestions).
+        if (generation !== generationRef.current) return;
 
         const indexWithoutCurrent = new Map(
           [...embeddingIndex.entries()].filter(([path]) => path !== activeFile)

@@ -95,7 +95,8 @@ export function Sidebar() {
           searchQuery,
           embeddingProvider,
           embeddingModel,
-          effectiveKey
+          effectiveKey,
+          'query'
         );
         const results = topKSimilar(queryEmbedding, embeddingIndex, 10).filter(r => r.score > 0.5);
         setSemanticResults(

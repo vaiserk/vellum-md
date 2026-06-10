@@ -10,6 +10,21 @@ function flattenFiles(nodes: FileNode[]): FileNode[] {
   return result;
 }
 
+const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
+
+// Verifica se algum [[Wikilink]] do conteúdo aponta para `targetName`,
+// suportando aliases ([[Nota|texto]]) e âncoras de seção ([[Nota#secao]]).
+function referencesNote(content: string, targetName: string): boolean {
+  const target = targetName.toLowerCase();
+  WIKILINK_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = WIKILINK_RE.exec(content)) !== null) {
+    const noteName = match[1].split('|')[0].split('#')[0].trim().toLowerCase();
+    if (noteName === target) return true;
+  }
+  return false;
+}
+
 export function BacklinksPane() {
   const { activeFile, files, fileContents } = useVaultStore();
 
@@ -17,9 +32,8 @@ export function BacklinksPane() {
 
   const backlinks = useMemo(() => {
     if (!activeFile || !currentName) return [];
-    const pattern = `[[${currentName}]]`;
     return flattenFiles(files)
-      .filter(f => f.path !== activeFile && fileContents.get(f.path)?.includes(pattern))
+      .filter(f => f.path !== activeFile && referencesNote(fileContents.get(f.path) ?? '', currentName))
       .map(f => ({ name: f.name.replace('.md', ''), path: f.path }));
   }, [activeFile, files, fileContents, currentName]);
 

@@ -59,38 +59,39 @@ interface DecoSpec {
 
 function buildDecorations(view: EditorView): DecorationSet {
   try {
-  const text = view.state.doc.toString();
   const selection = view.state.selection.main;
   const specs: DecoSpec[] = [];
 
-  // Collect block math ranges first (higher priority)
-  const blockRanges: Array<[number, number]> = [];
-  const blockRe = /\$\$([\s\S]+?)\$\$/g;
-  let m: RegExpExecArray | null;
+  for (const { from: rangeFrom, to: rangeTo } of view.visibleRanges) {
+    const text = view.state.doc.sliceString(rangeFrom, rangeTo);
 
-  while ((m = blockRe.exec(text)) !== null) {
-    const from = m.index;
-    const to = from + m[0].length;
-    if (selection.from <= to && selection.to >= from) continue;
-    if (!rangeInViewport(view, from, to)) continue;
-    const tex = m[1].trim();
-    if (tex) {
-      blockRanges.push([from, to]);
-      specs.push({ from, to, widget: new BlockMathWidget(tex) });
+    // Collect block math ranges first (higher priority)
+    const blockRanges: Array<[number, number]> = [];
+    const blockRe = /\$\$([\s\S]+?)\$\$/g;
+    let m: RegExpExecArray | null;
+
+    while ((m = blockRe.exec(text)) !== null) {
+      const from = rangeFrom + m.index;
+      const to = from + m[0].length;
+      if (selection.from <= to && selection.to >= from) continue;
+      const tex = m[1].trim();
+      if (tex) {
+        blockRanges.push([from, to]);
+        specs.push({ from, to, widget: new BlockMathWidget(tex) });
+      }
     }
-  }
 
-  // Collect inline math — skip positions inside block math
-  const inlineRe = /\$([^$\n]+?)\$/g;
-  while ((m = inlineRe.exec(text)) !== null) {
-    const from = m.index;
-    const to = from + m[0].length;
-    if (blockRanges.some(([s, e]) => from >= s && to <= e)) continue;
-    if (selection.from <= to && selection.to >= from) continue;
-    if (!rangeInViewport(view, from, to)) continue;
-    const tex = m[1].trim();
-    if (tex) {
-      specs.push({ from, to, widget: new InlineMathWidget(tex) });
+    // Collect inline math — skip positions inside block math
+    const inlineRe = /\$([^$\n]+?)\$/g;
+    while ((m = inlineRe.exec(text)) !== null) {
+      const from = rangeFrom + m.index;
+      const to = from + m[0].length;
+      if (blockRanges.some(([s, e]) => from >= s && to <= e)) continue;
+      if (selection.from <= to && selection.to >= from) continue;
+      const tex = m[1].trim();
+      if (tex) {
+        specs.push({ from, to, widget: new InlineMathWidget(tex) });
+      }
     }
   }
 
@@ -115,8 +116,4 @@ function buildDecorations(view: EditorView): DecorationSet {
   } catch {
     return new RangeSetBuilder<Decoration>().finish();
   }
-}
-
-function rangeInViewport(view: EditorView, from: number, to: number): boolean {
-  return from < view.viewport.to && to > view.viewport.from;
 }

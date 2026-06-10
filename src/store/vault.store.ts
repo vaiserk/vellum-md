@@ -208,7 +208,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   },
 
   buildEmbeddingIndex: async () => {
-    const { vaultPath, files } = get();
+    const { vaultPath, files, embeddingStatus } = get();
     const settings = useSettingsStore.getState();
     const effectiveKey = settings.getEmbeddingKey();
 
@@ -217,12 +217,22 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       set({ embeddingStatus: 'error' });
       return;
     }
+    // Evita execuções concorrentes: criar/renomear arquivos durante uma indexação em
+    // andamento dispara um novo buildEmbeddingIndex, e duas execuções em paralelo
+    // disputariam a escrita do cache e dos índices em memória.
+    if (embeddingStatus === 'indexing') return;
 
     set({ embeddingStatus: 'indexing', embeddingError: null, indexingProgress: { current: 0, total: 0 } });
 
     try {
       const cache: EmbeddingCache = await window.electron.fs.readEmbeddingCache(vaultPath);
-      const entries: Record<string, EmbeddingCacheEntry> = cache.entries ?? {};
+      // Embeddings de modelos/provedores diferentes vivem em espaços vetoriais distintos —
+      // misturá-los na mesma busca produz similaridades sem sentido (relevância baixa/aleatória).
+      // Se o provedor/modelo configurado mudou desde a última indexação, descarta o cache
+      // inteiro e reembeda tudo do zero com o modelo atual.
+      const cacheMatchesCurrentModel =
+        cache.provider === settings.embeddingProvider && cache.model === settings.embeddingModel;
+      const entries: Record<string, EmbeddingCacheEntry> = cacheMatchesCurrentModel ? (cache.entries ?? {}) : {};
 
       const mdFiles = flattenFiles(files).filter(f => f.name.endsWith('.md'));
       set({ indexingProgress: { current: 0, total: mdFiles.length } });
