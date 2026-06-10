@@ -18,7 +18,7 @@ import { useSettingsStore } from './store/settings.store';
 
 function App() {
   const { vaultPath, files, theme, layoutMode, commandPaletteOpen, setCommandPaletteOpen, aiPanelOpen, setAiPanelOpen, buildEmbeddingIndex, loadTagsOnly } = useVaultStore();
-  const { settingsOpen, setSettingsOpen, fontSize, fontFamily, editorMaxWidth, suggestConnections, embeddingApiKey, apiKey } = useSettingsStore();
+  const { settingsOpen, setSettingsOpen, fontSize, fontFamily, editorMaxWidth, suggestConnections, getEmbeddingKey } = useSettingsStore();
   const [exportOpen, setExportOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem('vellum-onboarding-done');
@@ -30,8 +30,7 @@ function App() {
   useEffect(() => {
     if (!vaultPath || files.length === 0) return;
     loadTagsOnly();
-    const hasKey = embeddingApiKey || apiKey;
-    if (suggestConnections && hasKey) {
+    if (suggestConnections && getEmbeddingKey()) {
       buildEmbeddingIndex();
     }
   }, [vaultPath, files]);

@@ -1,4 +1,6 @@
-export type EmbeddingProviderKey = 'google' | 'openai';
+import { rateLimiter } from '../config/model-limits';
+
+export type EmbeddingProviderKey = 'google' | 'openai' | 'gemma';
 
 export interface EmbeddingProviderInfo {
   name: string;
@@ -16,6 +18,23 @@ export const embeddingProviders: Record<EmbeddingProviderKey, EmbeddingProviderI
     name: 'OpenAI',
     defaultModel: 'text-embedding-3-small',
     availableModels: ['text-embedding-3-small', 'text-embedding-3-large'],
+  },
+  // Gemma via Google AI API — usa o mesmo endpoint embedContent do Google.
+  // Modelos Gemma instruction-tuned geram representações vetoriais via API.
+  // Use a mesma chave de API do AI Studio / Gemini.
+  gemma: {
+    name: 'Gemma (Google)',
+    defaultModel: 'gemma-4-e4b-it',
+    availableModels: [
+      'gemma-4-31b-it',
+      'gemma-4-26b-it',
+      'gemma-4-e4b-it',
+      'gemma-4-e2b-it',
+      'gemma-3-27b-it',
+      'gemma-3-12b-it',
+      'gemma-3-4b-it',
+      'gemma-3-1b-it',
+    ],
   },
 };
 
@@ -133,17 +152,44 @@ export function extractTags(content: string): string[] {
   return [];
 }
 
-async function embedWithGoogle(text: string, model: string, apiKey: string): Promise<number[]> {
+/** Extrai o delay de retry em ms de uma resposta 429 da Google API. */
+function parseRetryDelayMs(body: any): number {
+  try {
+    const details: any[] = body?.error?.details ?? [];
+    const retryInfo = details.find(d => d['@type']?.includes('RetryInfo'));
+    if (retryInfo?.retryDelay) {
+      // Formato: "25s" ou "25.937s"
+      const secs = parseFloat(String(retryInfo.retryDelay).replace('s', ''));
+      if (!isNaN(secs)) return Math.ceil(secs * 1000) + 500; // +500ms de margem
+    }
+  } catch { /* ignora */ }
+  return 30_000; // fallback: aguarda 30s
+}
+
+async function embedWithGoogle(
+  text: string, model: string, apiKey: string, attempt = 0
+): Promise<number[]> {
+  // Rate limiter: respeita RPM antes de disparar a requisição
+  await rateLimiter.throttle(model);
+
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        content: { parts: [{ text }] },
-      }),
+      body: JSON.stringify({ content: { parts: [{ text }] } }),
     }
   );
+
+  // 429: rate limit da Google — aguarda o tempo sugerido e retenta (até 3x)
+  if (res.status === 429 && attempt < 3) {
+    const body = await res.json().catch(() => ({}));
+    const wait = parseRetryDelayMs(body);
+    console.warn(`[Embedding] 429 — aguardando ${Math.ceil(wait / 1000)}s antes de retentar (${attempt + 1}/3)`);
+    await new Promise(r => setTimeout(r, wait));
+    return embedWithGoogle(text, model, apiKey, attempt + 1);
+  }
+
   if (!res.ok) {
     const err = await res.text();
     throw new Error(`Google Embedding Error (${res.status}): ${err}`);
@@ -169,6 +215,41 @@ async function embedWithOpenAI(text: string, model: string, apiKey: string): Pro
   return data.data[0].embedding as number[];
 }
 
+// Gemma via Google AI API — usa o endpoint embedContent com modelos Gemma.
+// A mesma chave de API do AI Studio / Gemini é utilizada.
+async function embedWithGemma(
+  text: string, model: string, apiKey: string, attempt = 0
+): Promise<number[]> {
+  await rateLimiter.throttle(model);
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: { parts: [{ text }] },
+        taskType: 'RETRIEVAL_DOCUMENT',
+      }),
+    }
+  );
+
+  if (res.status === 429 && attempt < 3) {
+    const body = await res.json().catch(() => ({}));
+    const wait = parseRetryDelayMs(body);
+    console.warn(`[Embedding/Gemma] 429 — aguardando ${Math.ceil(wait / 1000)}s (${attempt + 1}/3)`);
+    await new Promise(r => setTimeout(r, wait));
+    return embedWithGemma(text, model, apiKey, attempt + 1);
+  }
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Gemma Embedding Error (${res.status}): ${err}`);
+  }
+  const data = await res.json();
+  return data.embedding.values as number[];
+}
+
 export class EmbeddingService {
   static async embed(
     text: string,
@@ -184,6 +265,8 @@ export class EmbeddingService {
         return embedWithGoogle(clean, model, apiKey);
       case 'openai':
         return embedWithOpenAI(clean, model, apiKey);
+      case 'gemma':
+        return embedWithGemma(clean, model, apiKey);
       default:
         throw new Error(`Provedor de embedding desconhecido: ${provider}`);
     }

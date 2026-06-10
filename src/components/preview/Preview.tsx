@@ -17,18 +17,64 @@ import { useVaultStore } from '../../store/vault.store';
 import mermaid from 'mermaid';
 import { visit } from 'unist-util-visit';
 
+// Initialize mermaid once at module level — NEVER call mermaid.initialize() inside a component.
+// Calling initialize() while another mermaid.render() is in progress resets internal state
+// and causes all concurrent diagrams to fail with "Syntax error" even when the code is valid.
 mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
+
+// Sync mermaid theme exactly once per theme change via MutationObserver.
+// This avoids calling initialize() inside React effects (which races with concurrent renders).
+let _lastMermaidTheme: string | null = null;
+function syncMermaidTheme() {
+  const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default';
+  if (theme === _lastMermaidTheme) return;
+  _lastMermaidTheme = theme;
+  mermaid.initialize({ startOnLoad: false, theme, securityLevel: 'loose' });
+}
+if (typeof MutationObserver !== 'undefined') {
+  new MutationObserver(syncMermaidTheme).observe(document.documentElement, {
+    attributes: true, attributeFilter: ['data-theme'],
+  });
+}
+syncMermaidTheme();
+
+// Global render queue — serializes mermaid.render() calls because mermaid is a singleton
+// and concurrent renders interfere with each other.
+let mermaidQueue = Promise.resolve();
+function enqueueMermaidRender(id: string, code: string) {
+  return new Promise<string>((resolve, reject) => {
+    mermaidQueue = mermaidQueue.then(async () => {
+      try {
+        const { svg } = await mermaid.render(id, code);
+        resolve(svg);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  });
+}
 
 function MermaidBlock({ code }: { code: string }) {
   const [svg, setSvg] = useState<string>('');
   const [error, setError] = useState<string>('');
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
+    cancelledRef.current = false;
     const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`;
-    const theme = document.documentElement.getAttribute('data-theme');
-    mermaid.initialize({ startOnLoad: false, theme: theme === 'dark' ? 'dark' : 'default', securityLevel: 'loose' });
-    mermaid.render(id, code).then(({ svg: s }) => { setSvg(s); setError(''); })
-      .catch((err) => { setError('Erro no diagrama: ' + (err?.message || String(err))); setSvg(''); });
+
+    // Theme sync is handled by the module-level MutationObserver (syncMermaidTheme).
+    // Never call mermaid.initialize() here — it resets singleton state mid-render
+    // and breaks concurrent diagram renders with spurious "Syntax error" messages.
+
+    enqueueMermaidRender(id, code)
+      .then((s) => { if (!cancelledRef.current) { setSvg(s); setError(''); } })
+      .catch((err) => { if (!cancelledRef.current) { setError('Erro no diagrama: ' + (err?.message || String(err))); setSvg(''); } });
+
+    return () => {
+      // Mark as cancelled so stale async results don't update unmounted component state
+      cancelledRef.current = true;
+    };
   }, [code]);
 
   if (error) return <div style={{ color: 'var(--error-color)', padding: '8px', fontSize: '12px' }}>{error}</div>;
@@ -71,10 +117,25 @@ function CustomPre({ children, ...props }: any) {
   );
 }
 
-function CustomImg(props: any) {
+function CustomImg({ src, alt, ...props }: any) {
+  const [broken, setBroken] = React.useState(false);
+  if (broken) {
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: '6px',
+        padding: '6px 10px', borderRadius: '6px', fontSize: '12px',
+        background: 'rgba(128,128,128,0.1)', border: '1px dashed var(--border-color)',
+        color: 'var(--text-secondary)', margin: '1em 0',
+      }}>
+        <span aria-hidden>🖼️</span>
+        <span>Imagem não encontrada: {alt || src}</span>
+      </span>
+    );
+  }
   return (
-    <img {...props} style={{ maxWidth: '100%', borderRadius: '8px', margin: '1em 0', display: 'block' }}
-      onError={(e: any) => { e.target.style.display = 'none'; }} />
+    <img {...props} src={src} alt={alt}
+      style={{ maxWidth: '100%', borderRadius: '8px', margin: '1em 0', display: 'block' }}
+      onError={() => setBroken(true)} />
   );
 }
 
@@ -124,6 +185,17 @@ function remarkCallouts() {
         children: [{ type: 'text', value: `${icons[type] || 'ℹ️'} ${type.charAt(0).toUpperCase() + type.slice(1)}` }]
       });
     });
+  };
+}
+
+// remark-frontmatter parses the YAML/TOML block but leaves the node in the tree.
+// remarkRehype then serializes it as raw text visible in the preview.
+// This plugin removes those nodes before the tree reaches remarkRehype.
+function remarkStripFrontmatter() {
+  return (tree: any) => {
+    tree.children = tree.children.filter(
+      (node: any) => node.type !== 'yaml' && node.type !== 'toml'
+    );
   };
 }
 
@@ -211,6 +283,7 @@ export function Preview() {
       const processor = unified()
         .use(remarkParse)
         .use(remarkFrontmatter, ['yaml', 'toml'])
+        .use(remarkStripFrontmatter)
         .use(remarkGfm)
         .use(remarkMath)
         .use(remarkBreaks)

@@ -63,6 +63,7 @@ interface VaultState {
   tagIndex: Map<string, string[]>;
   fileContents: Map<string, string>;
   embeddingStatus: EmbeddingStatus;
+  embeddingError: string | null;
   indexingProgress: { current: number; total: number };
 
 
@@ -115,6 +116,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   tagIndex: new Map(),
   fileContents: new Map(),
   embeddingStatus: 'idle',
+  embeddingError: null,
   indexingProgress: { current: 0, total: 0 },
 
   setNewNoteModalOpen: (open) => set({ newNoteModalOpen: open }),
@@ -208,7 +210,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   buildEmbeddingIndex: async () => {
     const { vaultPath, files } = get();
     const settings = useSettingsStore.getState();
-    const effectiveKey = settings.embeddingApiKey || settings.apiKey;
+    const effectiveKey = settings.getEmbeddingKey();
 
     if (!vaultPath) return;
     if (!effectiveKey) {
@@ -216,7 +218,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       return;
     }
 
-    set({ embeddingStatus: 'indexing', indexingProgress: { current: 0, total: 0 } });
+    set({ embeddingStatus: 'indexing', embeddingError: null, indexingProgress: { current: 0, total: 0 } });
 
     try {
       const cache: EmbeddingCache = await window.electron.fs.readEmbeddingCache(vaultPath);
@@ -283,8 +285,22 @@ export const useVaultStore = create<VaultState>((set, get) => ({
 
             passageIndex.set(file.path, embeddedPassages);
             entries[file.path] = { mtime: file.mtime, embedding, passages: embeddedPassages };
-          } catch (e) {
-            console.error(`Embedding failed for ${file.name}:`, e);
+          } catch (e: any) {
+            const msg: string = e?.message ?? String(e);
+            console.error(`Embedding failed for ${file.name}:`, msg);
+            // Só aborta em erros de autenticação — são sistêmicos e não adianta continuar
+            if (msg.includes('API_KEY_INVALID') || msg.includes('401') ||
+                (msg.includes('400') && msg.includes('API key'))) {
+              set({
+                embeddingStatus: 'error',
+                embeddingError: 'Chave de API inválida. Verifique as Configurações.',
+                embeddingIndex, passageIndex, tagIndex, fileContents,
+                indexingProgress: { current: i + 1, total: mdFiles.length },
+              });
+              return;
+            }
+            // 429 e outros erros transitórios: pula o arquivo e continua
+            // (o embedding service já tentou 3x com backoff antes de lançar)
           }
         }
 

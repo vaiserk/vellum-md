@@ -3,6 +3,7 @@ import path from 'path';
 import { setupFsHandlers } from './handlers/fs.handler';
 import { setupExportHandlers } from './handlers/export.handler';
 
+const isDev = !!process.env.VITE_DEV_SERVER_URL;
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow() {
@@ -14,7 +15,9 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false, // Permite carregar file:// no modo de desenvolvimento (localhost)
+      // Disable webSecurity only in dev (needed for localhost ↔ file:// cross-origin).
+      // In production the app loads from file:// directly — webSecurity must stay ON.
+      webSecurity: !isDev,
     },
   });
 
