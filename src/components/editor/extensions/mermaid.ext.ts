@@ -7,6 +7,7 @@ let mermaidCounter = 0;
 class MermaidWidget extends WidgetType {
   private readonly code: string;
   private readonly id: string;
+  private destroyed = false;
 
   constructor(code: string) {
     super();
@@ -19,19 +20,30 @@ class MermaidWidget extends WidgetType {
     div.className = 'cm-mermaid-widget';
     div.setAttribute('data-mermaid-code', this.code);
 
-    // Async render into the div after it's attached to the DOM
+    // Async render into the div after it's attached to the DOM.
+    // Guard with `destroyed` so we never write to a detached node
+    // after CodeMirror has already recycled / destroyed this widget.
     requestAnimationFrame(() => {
-      mermaid.render(this.id, this.code).then(({ svg }) => {
-        div.innerHTML = svg;
-      }).catch(() => {
-        div.textContent = '[Mermaid: erro de sintaxe]';
-        div.style.color = 'var(--error-color)';
-        div.style.fontSize = '11px';
-        div.style.padding = '4px';
-      });
+      if (this.destroyed) return;
+      mermaid.render(this.id, this.code)
+        .then(({ svg }) => {
+          if (!this.destroyed) div.innerHTML = svg;
+        })
+        .catch(() => {
+          if (!this.destroyed) {
+            div.textContent = '[Mermaid: erro de sintaxe]';
+            div.style.color = 'var(--error-color)';
+            div.style.fontSize = '11px';
+            div.style.padding = '4px';
+          }
+        });
     });
 
     return div;
+  }
+
+  destroy(): void {
+    this.destroyed = true;
   }
 
   eq(other: MermaidWidget): boolean {

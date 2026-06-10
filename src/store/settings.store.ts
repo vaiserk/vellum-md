@@ -34,6 +34,24 @@ const providers: Record<string, AIProvider> = {
     defaultModel: 'gemini-2.5-flash',
     availableModels: ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite'],
   },
+  // Gemma via Google AI native API (generateContent) — mesma chave do AI Studio / Gemini.
+  gemma: {
+    name: 'Gemma (Google)',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    defaultModel: 'gemma-4-31b-it',
+    availableModels: [
+      // ── Gemma 4 (IDs confirmados via API) ──
+      'gemma-4-31b-it',        // Gemma 4 31B IT — denso
+      'gemma-4-26b-a4b-it',    // Gemma 4 26B A4B IT — MoE (eficiente)
+      // ── Gemma 3 (IDs confirmados) ──
+      'gemma-3-27b-it',
+      'gemma-3-12b-it',
+      'gemma-3-4b-it',
+      'gemma-3-1b-it',
+      'gemma-3n-e4b-it',
+      'gemma-3n-e2b-it',
+    ],
+  },
 };
 
 interface SettingsState {
@@ -63,12 +81,18 @@ interface SettingsState {
   // UI
   settingsOpen: boolean;
 
+  // Modelos descobertos via "Descobrir modelos" — persistidos por provedor
+  discoveredAiModels: Record<string, { id: string; displayName: string }[]>;
+  discoveredEmbeddingModels: Record<string, { id: string; displayName: string }[]>;
+
   // Actions
   setAiProvider: (provider: string) => void;
   setApiKey: (key: string) => void;
   setAiModel: (model: string) => void;
   setAiEnabled: (on: boolean) => void;
   setSuggestConnections: (on: boolean) => void;
+  setDiscoveredAiModels: (provider: string, models: { id: string; displayName: string }[]) => void;
+  setDiscoveredEmbeddingModels: (provider: string, models: { id: string; displayName: string }[]) => void;
   setEmbeddingProvider: (provider: EmbeddingProviderKey) => void;
   setEmbeddingModel: (model: string) => void;
   setEmbeddingApiKey: (key: string) => void;
@@ -85,6 +109,8 @@ interface SettingsState {
   getProvider: () => AIProvider;
   getAvailableProviders: () => Record<string, AIProvider>;
   getEmbeddingProviders: () => typeof embeddingProviders;
+  /** Resolve a melhor chave para embedding (evita usar chave inválida/antiga). */
+  getEmbeddingKey: () => string;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -95,6 +121,8 @@ export const useSettingsStore = create<SettingsState>()(
       aiModel: 'gpt-4o-mini',
       aiEnabled: false,
       suggestConnections: true,
+      discoveredAiModels: {},
+      discoveredEmbeddingModels: {},
       embeddingProvider: 'google',
       embeddingModel: 'gemini-embedding-2-preview',
       embeddingApiKey: '',
@@ -109,8 +137,25 @@ export const useSettingsStore = create<SettingsState>()(
 
       setAiProvider: (provider) => {
         const p = providers[provider];
-        set({ aiProvider: provider, aiModel: p?.defaultModel || '' });
+        // Ao trocar provedor, usa o modelo descoberto mais recente (se houver) ou o default
+        const discovered = get().discoveredAiModels[provider];
+        const model = discovered?.length ? discovered[0].id : (p?.defaultModel || '');
+        set({ aiProvider: provider, aiModel: model });
       },
+      setDiscoveredAiModels: (provider, models) =>
+        set(state => ({
+          discoveredAiModels: { ...state.discoveredAiModels, [provider]: models },
+          ...(state.aiProvider === provider && models.length > 0 && !models.find(m => m.id === state.aiModel)
+            ? { aiModel: models[0].id }
+            : {}),
+        })),
+      setDiscoveredEmbeddingModels: (provider, models) =>
+        set(state => ({
+          discoveredEmbeddingModels: { ...state.discoveredEmbeddingModels, [provider]: models },
+          ...(state.embeddingProvider === provider && models.length > 0 && !models.find(m => m.id === state.embeddingModel)
+            ? { embeddingModel: models[0].id }
+            : {}),
+        })),
       setApiKey: (key) => set({ apiKey: key }),
       setAiModel: (model) => set({ aiModel: model }),
       setAiEnabled: (on) => set({ aiEnabled: on }),
@@ -133,6 +178,17 @@ export const useSettingsStore = create<SettingsState>()(
       getProvider: () => providers[get().aiProvider] || providers.openai,
       getAvailableProviders: () => providers,
       getEmbeddingProviders: () => embeddingProviders,
+      getEmbeddingKey: () => {
+        const { embeddingProvider, embeddingApiKey, apiKey } = get();
+        // Para Google/Gemma, chaves válidas começam com "AIza".
+        // Se o campo de embedding tiver lixo/chave antiga, cai para a chave de IA válida.
+        if (embeddingProvider === 'google' || embeddingProvider === 'gemma') {
+          if (embeddingApiKey.startsWith('AIza')) return embeddingApiKey;
+          if (apiKey.startsWith('AIza')) return apiKey;
+          return embeddingApiKey || apiKey;
+        }
+        return embeddingApiKey || apiKey;
+      },
     }),
     {
       name: 'vellum-settings',
@@ -142,6 +198,8 @@ export const useSettingsStore = create<SettingsState>()(
         aiModel: state.aiModel,
         aiEnabled: state.aiEnabled,
         suggestConnections: state.suggestConnections,
+        discoveredAiModels: state.discoveredAiModels,
+        discoveredEmbeddingModels: state.discoveredEmbeddingModels,
         embeddingProvider: state.embeddingProvider,
         embeddingModel: state.embeddingModel,
         embeddingApiKey: state.embeddingApiKey,

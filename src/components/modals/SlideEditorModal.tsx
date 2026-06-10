@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ChevronLeft, ChevronRight, Download, Loader, Plus } from 'lucide-react';
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
@@ -84,7 +84,7 @@ async function mdToHtml(markdown: string): Promise<string> {
     .use(remarkWikilinks)
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeKatex)
-    .use(rehypeHighlight, { ignoreMissing: true })
+    .use(rehypeHighlight)
     .use(rehypeStringify);
   return String(await processor.process(markdown));
 }

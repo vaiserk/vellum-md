@@ -1,22 +1,102 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useSettingsStore } from '../../store/settings.store';
 import { useVaultStore } from '../../store/vault.store';
 import { AIService } from '../../services/ai.service';
-import { X } from 'lucide-react';
+import { X, RefreshCw, FlaskConical } from 'lucide-react';
 
 export function SettingsModal() {
   const settings = useSettingsStore();
-  const { embeddingStatus, indexingProgress, buildEmbeddingIndex } = useVaultStore();
+  const { embeddingStatus, embeddingError, indexingProgress, buildEmbeddingIndex } = useVaultStore();
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [wizardReset, setWizardReset] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverError, setDiscoverError] = useState('');
+  const [discoveringEmbed, setDiscoveringEmbed] = useState(false);
+  const [discoverEmbedError, setDiscoverEmbedError] = useState('');
 
   const provider = settings.getProvider();
   const providers = settings.getAvailableProviders();
+  const isGemmaProvider = settings.aiProvider === 'gemma';
+  const isGemmaEmbedding = settings.embeddingProvider === 'gemma';
+
+  // Modelos descobertos — persistidos no store
+  const discoveredModels = settings.discoveredAiModels[settings.aiProvider] ?? [];
+  const discoveredEmbedModels = settings.discoveredEmbeddingModels[settings.embeddingProvider] ?? [];
+
+  const handleDiscoverEmbedModels = async () => {
+    setDiscoveringEmbed(true);
+    setDiscoverEmbedError('');
+    const filter = isGemmaEmbedding ? 'gemma' : '';
+
+    // Tenta as chaves disponíveis em ordem de preferência:
+    // 1. embeddingApiKey (se preenchida e parecer chave Google — começa com 'AIza')
+    // 2. apiKey (chave do provedor de IA, usada quando o provedor é Gemma/Google)
+    const candidates: string[] = [];
+    if (settings.embeddingApiKey?.startsWith('AIza')) candidates.push(settings.embeddingApiKey);
+    if (settings.apiKey?.startsWith('AIza')) candidates.push(settings.apiKey);
+    // Fallback: tenta qualquer chave preenchida
+    if (settings.embeddingApiKey && !candidates.includes(settings.embeddingApiKey)) candidates.push(settings.embeddingApiKey);
+    if (settings.apiKey && !candidates.includes(settings.apiKey)) candidates.push(settings.apiKey);
+
+    if (candidates.length === 0) {
+      setDiscoverEmbedError('Configure a chave do Google AI Studio (começa com "AIza") no campo "Chave de Embedding" ou na seção de IA acima.');
+      setDiscoveringEmbed(false);
+      return;
+    }
+
+    let lastError = '';
+    for (const key of candidates) {
+      try {
+        const models = await AIService.listGoogleEmbeddingModels(key, filter);
+        if (models.length === 0) {
+          setDiscoverEmbedError('Nenhum modelo encontrado. Verifique acesso em aistudio.google.com.');
+        } else {
+          settings.setDiscoveredEmbeddingModels(settings.embeddingProvider, models);
+          settings.setEmbeddingModel(models[0].id);
+        }
+        setDiscoveringEmbed(false);
+        return;
+      } catch (e: any) {
+        lastError = e.message ?? 'Erro desconhecido';
+      }
+    }
+    // Todas as chaves falharam
+    setDiscoverEmbedError(`${lastError} — Use a chave do Google AI Studio (aistudio.google.com). Deixe "Chave de Embedding" vazia para usar a mesma chave da seção IA.`);
+    setDiscoveringEmbed(false);
+  };
 
   const handleTestConnection = async () => {
     setTestStatus('testing');
     const ok = await AIService.testConnection();
     setTestStatus(ok ? 'success' : 'error');
     setTimeout(() => setTestStatus('idle'), 3000);
+  };
+
+  // Busca os IDs exatos de modelos Gemma disponíveis na conta Google AI
+  const handleDiscoverModels = async () => {
+    setDiscovering(true);
+    setDiscoverError('');
+
+    const key = settings.apiKey;
+    if (!key?.startsWith('AIza')) {
+      setDiscoverError('Use a chave do Google AI Studio (começa com "AIza"). Acesse aistudio.google.com → "Get API key".');
+      setDiscovering(false);
+      return;
+    }
+    try {
+      const all = await AIService.listGoogleModels(key);
+      const gemmaModels = all.filter(m => m.id.toLowerCase().includes('gemma'));
+      if (gemmaModels.length === 0) {
+        setDiscoverError('Nenhum modelo Gemma encontrado na sua conta. Verifique o acesso em aistudio.google.com.');
+      } else {
+        settings.setDiscoveredAiModels(settings.aiProvider, gemmaModels);
+        settings.setAiModel(gemmaModels[0].id);
+      }
+    } catch (e: any) {
+      setDiscoverError(`${e.message ?? 'Erro ao buscar modelos.'} — Verifique se a chave é do Google AI Studio.`);
+    } finally {
+      setDiscovering(false);
+    }
   };
 
   return (
@@ -113,14 +193,51 @@ export function SettingsModal() {
 
             <div className="settings-row">
               <label>Modelo</label>
-              <select 
-                value={settings.aiModel}
-                onChange={e => settings.setAiModel(e.target.value)}
-              >
-                {provider.availableModels.map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
+              <div className="settings-control" style={{ flex: 1, flexDirection: 'column', alignItems: 'stretch', gap: '4px' }}>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  <select
+                    value={settings.aiModel}
+                    onChange={e => settings.setAiModel(e.target.value)}
+                    style={{ flex: 1 }}
+                  >
+                    {/* Modelos descobertos via API têm prioridade */}
+                    {discoveredModels.length > 0
+                      ? discoveredModels.map(m => (
+                          <option key={m.id} value={m.id}>{m.displayName} ({m.id})</option>
+                        ))
+                      : provider.availableModels.map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))
+                    }
+                  </select>
+                  {/* Botão "Descobrir modelos" — aparece apenas para provedor Gemma */}
+                  {isGemmaProvider && (
+                    <button
+                      onClick={handleDiscoverModels}
+                      disabled={discovering}
+                      title="Buscar modelos disponíveis na sua conta Google AI"
+                      style={{ fontSize: '11px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+                    >
+                      <RefreshCw size={12} style={{ animation: discovering ? 'spin 1s linear infinite' : 'none' }} />
+                      {discovering ? 'Buscando...' : 'Descobrir modelos'}
+                    </button>
+                  )}
+                </div>
+                {/* Feedback de erro ou modelos encontrados */}
+                {isGemmaProvider && discoverError && (
+                  <span style={{ fontSize: '11px', color: 'var(--error-color)' }}>{discoverError}</span>
+                )}
+                {isGemmaProvider && discoveredModels.length > 0 && (
+                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    ✓ {discoveredModels.length} modelo(s) Gemma encontrado(s) na sua conta.
+                  </span>
+                )}
+                {isGemmaProvider && discoveredModels.length === 0 && !discoverError && (
+                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    Clique em "Descobrir modelos" para buscar os IDs exatos disponíveis na sua conta.
+                  </span>
+                )}
+              </div>
             </div>
 
           </div>
@@ -171,14 +288,49 @@ export function SettingsModal() {
 
             <div className="settings-row">
               <label>Modelo</label>
-              <select
-                value={settings.embeddingModel}
-                onChange={e => settings.setEmbeddingModel(e.target.value)}
-              >
-                {settings.getEmbeddingProviders()[settings.embeddingProvider]?.availableModels.map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
+              <div className="settings-control" style={{ flex: 1, flexDirection: 'column', alignItems: 'stretch', gap: '4px' }}>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  <select
+                    value={settings.embeddingModel}
+                    onChange={e => settings.setEmbeddingModel(e.target.value)}
+                    style={{ flex: 1 }}
+                  >
+                    {discoveredEmbedModels.length > 0
+                      ? discoveredEmbedModels.map(m => (
+                          <option key={m.id} value={m.id}>{m.displayName} ({m.id})</option>
+                        ))
+                      : settings.getEmbeddingProviders()[settings.embeddingProvider]?.availableModels.map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))
+                    }
+                  </select>
+                  {/* Botão de descoberta — para Gemma e Google (lista modelos com embedContent) */}
+                  {(isGemmaEmbedding || settings.embeddingProvider === 'google') && (
+                    <button
+                      onClick={handleDiscoverEmbedModels}
+                      disabled={discoveringEmbed}
+                      title="Buscar modelos de embedding disponíveis na sua conta Google AI"
+                      style={{ fontSize: '11px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+                    >
+                      <RefreshCw size={12} style={{ animation: discoveringEmbed ? 'spin 1s linear infinite' : 'none' }} />
+                      {discoveringEmbed ? 'Buscando...' : 'Descobrir modelos'}
+                    </button>
+                  )}
+                </div>
+                {discoverEmbedError && (
+                  <span style={{ fontSize: '11px', color: 'var(--error-color)' }}>{discoverEmbedError}</span>
+                )}
+                {discoveredEmbedModels.length > 0 && (
+                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    ✓ {discoveredEmbedModels.length} modelo(s) encontrado(s) na sua conta.
+                  </span>
+                )}
+                {isGemmaEmbedding && discoveredEmbedModels.length === 0 && !discoverEmbedError && (
+                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    Clique em "Descobrir modelos" para buscar os IDs reais disponíveis.
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="settings-row">
@@ -215,7 +367,11 @@ export function SettingsModal() {
                 {embeddingStatus === 'idle' && 'Não indexado'}
                 {embeddingStatus === 'indexing' && `Indexando... ${indexingProgress.current}/${indexingProgress.total}`}
                 {embeddingStatus === 'ready' && '✓ Pronto'}
-                {embeddingStatus === 'error' && '✕ Erro (verifique a chave)'}
+                {embeddingStatus === 'error' && (
+                  <span style={{ color: 'var(--error-color)', fontSize: '11px' }}>
+                    ✕ {embeddingError ?? 'Erro — verifique a chave e o modelo selecionado'}
+                  </span>
+                )}
               </span>
             </div>
 
@@ -230,6 +386,38 @@ export function SettingsModal() {
               </button>
             </div>
           </div>
+          {/* Developer Section */}
+          <div className="settings-section">
+            <h4 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FlaskConical size={14} />
+              Desenvolvedor / Testes
+            </h4>
+
+            <div className="settings-row">
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <span>Wizard de boas-vindas</span>
+                <span style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>
+                  Simula um usuário abrindo o app pela primeira vez
+                </span>
+              </label>
+              <button
+                onClick={() => {
+                  localStorage.removeItem('vellum-onboarding-done');
+                  setWizardReset(true);
+                  setTimeout(() => setWizardReset(false), 2500);
+                  settings.setSettingsOpen(false);
+                  // Recarrega a página para o estado inicial ser relido
+                  window.location.reload();
+                }}
+                style={{ fontSize: '11px', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '5px' }}
+              >
+                {wizardReset
+                  ? '✓ Recarregando...'
+                  : <><RefreshCw size={12} /> Resetar wizard</>}
+              </button>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>

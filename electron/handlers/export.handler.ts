@@ -2,6 +2,24 @@ import { ipcMain, BrowserWindow, dialog } from 'electron';
 import fs from 'fs';
 import path from 'path';
 
+// ─── Shared callout CSS (used in PDF, slides, site) ───────────────────────────
+const CALLOUT_CSS = `
+  .callout { border-left: 4px solid; border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 12px 0; }
+  .callout-title { font-weight: 700; font-size: 0.9em; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+  .callout-note    { border-color: #4a9eff; background: rgba(74,158,255,0.08); }
+  .callout-note    .callout-title { color: #4a9eff; }
+  .callout-tip     { border-color: #3fb950; background: rgba(63,185,80,0.08); }
+  .callout-tip     .callout-title { color: #3fb950; }
+  .callout-warning { border-color: #d29922; background: rgba(210,153,34,0.08); }
+  .callout-warning .callout-title { color: #d29922; }
+  .callout-caution { border-color: #e3a14f; background: rgba(227,161,79,0.08); }
+  .callout-caution .callout-title { color: #e3a14f; }
+  .callout-danger  { border-color: #f85149; background: rgba(248,81,73,0.08); }
+  .callout-danger  .callout-title { color: #f85149; }
+  .callout-important { border-color: #a371f7; background: rgba(163,113,247,0.08); }
+  .callout-important .callout-title { color: #a371f7; }
+`;
+
 // ─── Shared PDF CSS ────────────────────────────────────────────────────────────
 const PDF_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400&display=swap');
@@ -33,26 +51,18 @@ const PDF_CSS = `
     white-space: pre-wrap;
     word-break: break-word;
   }
-  pre code { background: transparent; padding: 0; }
+  pre code { background: transparent; padding: 0; font-size: 0.9em; }
   table { width: 100%; border-collapse: collapse; margin: 1em 0; }
   th, td { border: 1px solid #ddd; padding: 6px 10px; }
   th { background: #f0f0f0; }
   tr:nth-child(even) { background: #fafafa; }
   blockquote { border-left: 4px solid #5b4fcf; margin: 1em 0; padding: 0.5em 1em; background: #f8f7ff; }
   img { max-width: 100%; }
-  /* KaTeX — sem scrollbar no PDF */
-  .katex-display {
-    overflow: visible !important;
-    padding: 0.5em 0;
-    text-align: center;
-  }
-  .katex-display > .katex {
-    white-space: normal;
-    overflow-wrap: break-word;
-  }
-  /* Mermaid SVGs */
+  .katex-display { overflow: visible !important; padding: 0.5em 0; text-align: center; }
+  .katex-display > .katex { white-space: normal; overflow-wrap: break-word; }
   .mermaid { display: flex; justify-content: center; margin: 1.5em 0; }
   .mermaid svg { max-width: 100%; height: auto; }
+  ${CALLOUT_CSS}
 `;
 
 // ─── Build HTML for PDF / Site pages ──────────────────────────────────────────
@@ -63,6 +73,7 @@ function buildPdfHtml(bodyContent: string): string {
   <meta charset="utf-8">
   <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css" rel="stylesheet">
   <style>${PDF_CSS}</style>
 </head>
 <body>
@@ -169,13 +180,30 @@ export function setupExportHandlers() {
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/${options.theme || 'black'}.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
   <style>
-    .reveal pre { font-size: 0.75em; }
+    .reveal pre { font-size: 0.75em; box-shadow: none; }
+    .reveal pre code.hljs { padding: 0.75em 1em; border-radius: 6px; }
     .reveal .katex-display { overflow: visible !important; }
     .reveal .mermaid { display: flex; justify-content: center; }
     .reveal .mermaid svg { max-width: 90%; height: auto; }
-    .reveal section { text-align: left; }
+    .reveal section { text-align: left; overflow-y: auto; }
     .reveal h1, .reveal h2, .reveal h3 { text-transform: none; }
+    /* Callouts */
+    .reveal .callout { border-left: 4px solid; border-radius: 0 6px 6px 0; padding: 8px 12px; margin: 8px 0; font-size: 0.85em; }
+    .reveal .callout-title { font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 5px; }
+    .reveal .callout-note    { border-color: #4a9eff; background: rgba(74,158,255,0.12); }
+    .reveal .callout-note    .callout-title { color: #4a9eff; }
+    .reveal .callout-tip     { border-color: #3fb950; background: rgba(63,185,80,0.12); }
+    .reveal .callout-tip     .callout-title { color: #3fb950; }
+    .reveal .callout-warning { border-color: #d29922; background: rgba(210,153,34,0.12); }
+    .reveal .callout-warning .callout-title { color: #d29922; }
+    .reveal .callout-caution { border-color: #e3a14f; background: rgba(227,161,79,0.12); }
+    .reveal .callout-caution .callout-title { color: #e3a14f; }
+    .reveal .callout-danger  { border-color: #f85149; background: rgba(248,81,73,0.12); }
+    .reveal .callout-danger  .callout-title { color: #f85149; }
+    .reveal .callout-important { border-color: #a371f7; background: rgba(163,113,247,0.12); }
+    .reveal .callout-important .callout-title { color: #a371f7; }
   </style>
 </head>
 <body>
@@ -200,6 +228,11 @@ export function setupExportHandlers() {
     });
 
     Reveal.on('ready', function() {
+      // Allow slides with more content than fits to scroll vertically
+      document.querySelectorAll('.reveal .slides section').forEach(function(s) {
+        s.style.overflowY = 'auto';
+      });
+
       document.querySelectorAll('pre code.language-mermaid, .mermaid-src').forEach(function(el) {
         var div = document.createElement('div');
         div.className = 'mermaid';
@@ -259,7 +292,7 @@ export function setupExportHandlers() {
         article li { margin: 0.25rem 0; }
         article pre { background: #1e1e2e; color: #cdd6f4; border-radius: 8px; padding: 1rem; overflow-x: auto; font-size: 0.85rem; margin: 1rem 0; }
         article code { font-family: 'Cascadia Code', 'JetBrains Mono', monospace; font-size: 0.85em; background: var(--surface); padding: 2px 5px; border-radius: 4px; }
-        article pre code { background: transparent; padding: 0; }
+        article pre code { background: transparent; padding: 0; color: inherit; }
         article blockquote { border-left: 4px solid var(--accent); padding: 0.5rem 1rem; background: rgba(108,99,255,0.06); border-radius: 0 6px 6px 0; margin: 1rem 0; color: var(--secondary); }
         article table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
         article th, article td { border: 1px solid var(--border); padding: 8px 12px; }
@@ -268,6 +301,24 @@ export function setupExportHandlers() {
         .mermaid { display: flex; justify-content: center; margin: 1.5rem 0; }
         .mermaid svg { max-width: 100%; }
         .katex-display { overflow: visible !important; margin: 1.25rem 0; text-align: center; }
+        /* Callouts */
+        .callout { border-left: 4px solid; border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 12px 0; }
+        .callout-title { font-weight: 700; font-size: 0.9em; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+        .callout-note    { border-color: #4a9eff; background: rgba(74,158,255,0.08); }
+        .callout-note    .callout-title { color: #4a9eff; }
+        .callout-tip     { border-color: #3fb950; background: rgba(63,185,80,0.08); }
+        .callout-tip     .callout-title { color: #3fb950; }
+        .callout-warning { border-color: #d29922; background: rgba(210,153,34,0.08); }
+        .callout-warning .callout-title { color: #d29922; }
+        .callout-caution { border-color: #e3a14f; background: rgba(227,161,79,0.08); }
+        .callout-caution .callout-title { color: #e3a14f; }
+        .callout-danger  { border-color: #f85149; background: rgba(248,81,73,0.08); }
+        .callout-danger  .callout-title { color: #f85149; }
+        .callout-important { border-color: #a371f7; background: rgba(163,113,247,0.08); }
+        .callout-important .callout-title { color: #a371f7; }
+        /* Wikilinks */
+        .wiki-link { color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent); }
+        .wiki-link:hover { border-bottom-style: solid; }
         @media (max-width: 768px) { .layout { grid-template-columns: 1fr; } nav { position: static; height: auto; } main { padding: 1.5rem; } }
       `;
 
@@ -275,13 +326,14 @@ export function setupExportHandlers() {
         .map(p => `<li><a href="${p.slug}.html">${p.title}</a></li>`)
         .join('\n');
 
-      const buildPageHtml = (page: { title: string; slug: string; html: string }, isIndex = false) => `<!DOCTYPE html>
+      const buildPageHtml = (page: { title: string; slug: string; html: string }) => `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${page.title}${options.vaultName ? ' — ' + options.vaultName : ''}</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
   <style>${SITE_CSS}</style>
 </head>
 <body>

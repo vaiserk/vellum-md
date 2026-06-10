@@ -187,6 +187,6 @@
 /* KaTeX display math centering */
 .markdown-preview .katex-display {
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible; /* was: hidden — tall equations (fractions, integrals) were clipped */
   padding: 0.5em 0;
 }

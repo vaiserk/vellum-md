@@ -1,16 +1,44 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, ReactElement, KeyboardEvent } from 'react';
+import { unified } from 'unified';
+import remarkParse from 'remark-parse';
+import remarkGfm from 'remark-gfm';
+import remarkRehype from 'remark-rehype';
+import rehypeHighlight from 'rehype-highlight';
+import rehypeReact from 'rehype-react';
+import * as prod from 'react/jsx-runtime';
 import { useVaultStore, AIMessage } from '../../store/vault.store';
 import { useSettingsStore } from '../../store/settings.store';
 import { AIService } from '../../services/ai.service';
-import { Send, Sparkles, FileText, CheckCircle, LayoutList, HelpCircle, CreditCard, X, Trash2 } from 'lucide-react';
+import { Send, Sparkles, FileText, CheckCircle, LayoutList, HelpCircle, CreditCard, X, Trash2, GitFork, Table, AlertCircle } from 'lucide-react';
+
+function MarkdownContent({ content }: { content: string }) {
+  const rendered = useMemo(() => {
+    try {
+      return unified()
+        .use(remarkParse)
+        .use(remarkGfm)
+        .use(remarkRehype)
+        .use(rehypeHighlight)
+        .use(rehypeReact, { ...prod } as any)
+        .processSync(content).result as ReactElement;
+    } catch {
+      return <span>{content}</span>;
+    }
+  }, [content]);
+
+  return <div className="ai-markdown">{rendered}</div>;
+}
 
 const quickActions = [
-  { label: 'Expandir', icon: <Sparkles size={14} />, prompt: 'Expanda o parágrafo selecionado com mais detalhes e exemplos' },
-  { label: 'Resumir', icon: <FileText size={14} />, prompt: 'Resuma o conteúdo desta nota em 3 bullet points principais' },
-  { label: 'Corrigir', icon: <CheckCircle size={14} />, prompt: 'Corrija erros gramaticais e de ortografia neste texto' },
-  { label: 'Organizar', icon: <LayoutList size={14} />, prompt: 'Reorganize esta nota com uma estrutura de headings clara' },
-  { label: 'Perguntas', icon: <HelpCircle size={14} />, prompt: 'Quais perguntas um leitor teria após ler esta nota?' },
-  { label: 'Flashcards', icon: <CreditCard size={14} />, prompt: 'Gere 5 flashcards Q&A no formato de tabela MD com o conteúdo desta nota' },
+  { label: 'Expandir',   icon: <Sparkles size={14} />,     prompt: 'Expanda o parágrafo selecionado com mais detalhes e exemplos' },
+  { label: 'Resumir',    icon: <FileText size={14} />,      prompt: 'Resuma o conteúdo desta nota em 3 bullet points principais' },
+  { label: 'Corrigir',   icon: <CheckCircle size={14} />,   prompt: 'Corrija erros gramaticais e de ortografia neste texto' },
+  { label: 'Organizar',  icon: <LayoutList size={14} />,    prompt: 'Reorganize esta nota com uma estrutura de headings clara' },
+  { label: 'Perguntas',  icon: <HelpCircle size={14} />,    prompt: 'Quais perguntas um leitor teria após ler esta nota?' },
+  { label: 'Flashcards', icon: <CreditCard size={14} />,    prompt: 'Gere 5 flashcards Q&A no formato de tabela Markdown com o conteúdo desta nota' },
+  { label: 'Diagrama',   icon: <GitFork size={14} />,       prompt: 'Crie um diagrama mermaid (graph TD) que ilustre o fluxo principal ou a estrutura descrita nesta nota. Siga estritamente as regras do mermaid 11 informadas no seu contexto.' },
+  { label: 'Tabela',     icon: <Table size={14} />,         prompt: 'Organize as informações desta nota em uma ou mais tabelas Markdown com colunas e linhas relevantes.' },
+  { label: 'Callout',    icon: <AlertCircle size={14} />,   prompt: 'Identifique o ponto mais importante desta nota e reformule-o como um callout VellumMD apropriado (ex: [!IMPORTANT], [!TIP], [!WARNING]).' },
 ];
 
 export function AIPanel({ onClose }: { onClose: () => void }) {
@@ -26,16 +54,73 @@ export function AIPanel({ onClose }: { onClose: () => void }) {
   }, [aiMessages, streamingText]);
 
   const getSystemPrompt = () => {
-    const title = activeFile?.split('/').pop()?.replace('.md', '') || 'Sem título';
-    return `Você é um assistente de escrita inteligente. O usuário está editando a seguinte nota:
+    const title = activeFile?.split(/[/\\]/).pop()?.replace('.md', '') || 'Sem título';
+    return `Você é um assistente de escrita especializado no VellumMD — um app de notas Markdown com recursos avançados de renderização.
+O usuário está editando: **${title}**
 
-Título: ${title}
-Conteúdo:
----
+<nota_atual>
 ${activeContent.slice(0, 4000)}
----
+</nota_atual>
 
-Responda sempre em português. Seja conciso e direto. Ao sugerir texto, formate em Markdown. Quando apropriado, use LaTeX para fórmulas.`;
+## Regras de resposta
+- Responda sempre em português, seja conciso e direto
+- Formate respostas em Markdown válido para o VellumMD
+- Ao gerar código, use blocos de código com a linguagem correta
+
+## Recursos disponíveis no VellumMD (use-os quando relevante)
+
+### Mermaid ${"`"}11.14.0${"`"} — REGRAS OBRIGATÓRIAS (nunca quebre estas regras)
+- Todo label com acentos, espaços, ?, :, (), <>, /, \\ ou qualquer símbolo especial DEVE estar entre aspas duplas: A["Texto com acento é obrigatório"]
+- NUNCA use tags HTML (<br>, <b>, etc.) dentro de labels. Para quebra de linha use \\n dentro de aspas: A["linha1\\nlinha2"]
+- Nomes de subgrafo com espaços ou acentos: subgraph id["Rótulo com Espaço"] — id deve ser alfanumérico (sem espaços)
+- Edge labels com símbolos: A -- "rótulo: especial?" --> B
+- Símbolos matemáticos em labels: substituir ≥ por >=, ≤ por <=, → por ->
+- Nunca repita um subgrafo com o mesmo id no mesmo diagrama
+- Exemplo de diagrama válido:
+\`\`\`mermaid
+graph TD
+    subgraph inicio["Início"]
+        A["Upload de Arquivo\\n(mp4/avi/mov)"]
+    end
+    subgraph processamento["Processamento"]
+        A --> B{"Arquivo válido?"}
+        B -- "SIM" --> C["Processar"]
+        B -- "NÃO" --> D["Mostrar erro"]
+    end
+\`\`\`
+
+### Fórmulas LaTeX (KaTeX)
+- Inline: $E = mc^2$ ou $\\frac{a}{b}$
+- Bloco centralizado: $$\\int_0^\\infty f(x)\\,dx$$
+
+### Callouts
+\`\`\`
+> [!NOTE] Informação adicional
+> [!TIP] Dica útil para o leitor
+> [!WARNING] Atenção necessária
+> [!CAUTION] Cuidado com isto
+> [!IMPORTANT] Ponto essencial
+> [!DANGER] Perigo crítico
+\`\`\`
+
+### Wikilinks
+- [[Nome da Nota]] — link para outra nota do vault
+- Sugira conexões com outras notas quando fizer sentido
+
+### Task lists interativas
+- [ ] tarefa pendente
+- [x] tarefa concluída
+
+### Tabelas GFM
+| Coluna A | Coluna B | Coluna C |
+|----------|----------|----------|
+| valor    | valor    | valor    |
+
+### Blocos de código com syntax highlight
+\`\`\`python
+# python, typescript, javascript, c, sql, bash, etc.
+\`\`\`
+`;
   };
 
   const sendMessage = async (userMessage: string) => {
@@ -89,7 +174,7 @@ Responda sempre em português. Seja conciso e direto. Ao sugerir texto, formate 
     editorView.focus();
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage(input);
@@ -134,9 +219,12 @@ Responda sempre em português. Seja conciso e direto. Ao sugerir texto, formate 
         )}
         {aiMessages.map((msg, i) => (
           <div key={i} className={`ai-message ai-message-${msg.role}`}>
-            <div className="ai-message-content">{msg.content}</div>
+            {msg.role === 'assistant'
+              ? <MarkdownContent content={msg.content} />
+              : <div className="ai-message-content">{msg.content}</div>
+            }
             {msg.role === 'assistant' && (
-              <button 
+              <button
                 className="ai-insert-btn"
                 onClick={() => insertInEditor(msg.content)}
                 title="Inserir no editor"
@@ -148,7 +236,7 @@ Responda sempre em português. Seja conciso e direto. Ao sugerir texto, formate 
         ))}
         {streamingText && (
           <div className="ai-message ai-message-assistant">
-            <div className="ai-message-content">{streamingText}</div>
+            <MarkdownContent content={streamingText} />
           </div>
         )}
         {loading && !streamingText && (

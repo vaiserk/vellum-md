@@ -12,7 +12,7 @@ interface Suggestion {
 
 export function LinkSuggestion() {
   const { activeContent, activeFile, embeddingIndex, embeddingStatus, editorView } = useVaultStore();
-  const { suggestConnections, embeddingApiKey, apiKey, embeddingProvider, embeddingModel } = useSettingsStore();
+  const { suggestConnections, embeddingProvider, embeddingModel, getEmbeddingKey } = useSettingsStore();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [visible, setVisible] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -36,7 +36,7 @@ export function LinkSuggestion() {
       const queryText = activeContent.slice(-400);
       if (queryText.trim().length < 30) return;
 
-      const effectiveKey = embeddingApiKey || apiKey;
+      const effectiveKey = getEmbeddingKey();
       if (!effectiveKey) return;
 
       try {

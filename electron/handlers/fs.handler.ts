@@ -148,6 +148,10 @@ export function setupFsHandlers(ipcMain: Electron.IpcMain, dialog: Electron.Dial
   });
 
   ipcMain.handle('shell:openExternal', async (_, url: string) => {
+    // Whitelist only safe protocols — block file://, javascript:, ms-settings:, etc.
+    let parsed: URL;
+    try { parsed = new URL(url); } catch { return; }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
     await shell.openExternal(url);
   });
 }

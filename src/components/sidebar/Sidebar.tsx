@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useVaultStore, FileNode } from '../../store/vault.store';
 import { useSettingsStore } from '../../store/settings.store';
 import { FileTree } from './FileTree';
@@ -32,7 +32,7 @@ export function Sidebar() {
     embeddingIndex, passageIndex, embeddingStatus, indexingProgress, tagIndex, fileContents, loadTagsOnly,
     setNewNoteModalOpen,
   } = useVaultStore();
-  const { setSettingsOpen, embeddingApiKey, apiKey, embeddingProvider, embeddingModel } = useSettingsStore();
+  const { setSettingsOpen, embeddingProvider, embeddingModel, getEmbeddingKey } = useSettingsStore();
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
   const [searchQuery, setSearchQuery] = useState('');
   const [semanticResults, setSemanticResults] = useState<SemanticResult[]>([]);
@@ -86,7 +86,7 @@ export function Sidebar() {
     if (semanticDebounce.current) clearTimeout(semanticDebounce.current);
 
     semanticDebounce.current = setTimeout(async () => {
-      const effectiveKey = embeddingApiKey || apiKey;
+      const effectiveKey = getEmbeddingKey();
       if (!effectiveKey || embeddingIndex.size === 0) return;
 
       setSemanticLoading(true);
