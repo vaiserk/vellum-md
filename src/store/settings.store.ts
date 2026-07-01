@@ -124,7 +124,7 @@ export const useSettingsStore = create<SettingsState>()(
       discoveredAiModels: {},
       discoveredEmbeddingModels: {},
       embeddingProvider: 'google',
-      embeddingModel: 'gemini-embedding-2-preview',
+      embeddingModel: 'gemini-embedding-001',
       embeddingApiKey: '',
       fontSize: 16,
       fontFamily: 'Inter',
@@ -180,9 +180,9 @@ export const useSettingsStore = create<SettingsState>()(
       getEmbeddingProviders: () => embeddingProviders,
       getEmbeddingKey: () => {
         const { embeddingProvider, embeddingApiKey, apiKey } = get();
-        // Para Google/Gemma, chaves válidas começam com "AIza".
+        // Para Google, chaves válidas começam com "AIza".
         // Se o campo de embedding tiver lixo/chave antiga, cai para a chave de IA válida.
-        if (embeddingProvider === 'google' || embeddingProvider === 'gemma') {
+        if (embeddingProvider === 'google') {
           if (embeddingApiKey.startsWith('AIza')) return embeddingApiKey;
           if (apiKey.startsWith('AIza')) return apiKey;
           return embeddingApiKey || apiKey;
@@ -192,6 +192,36 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'vellum-settings',
+      version: 1,
+      // Migra configurações persistidas de versões anteriores:
+      // - provedor de embedding 'gemma' foi removido (Gemma não suporta embedContent)
+      // - modelo 'gemini-embedding-2-preview' não existe na API (causava 404 em toda indexação)
+      migrate: (persisted: any) => {
+        const state = { ...(persisted ?? {}) };
+        const validModels = embeddingProviders.google.availableModels;
+        if (state.embeddingProvider !== 'google' && state.embeddingProvider !== 'openai') {
+          state.embeddingProvider = 'google';
+          state.embeddingModel = embeddingProviders.google.defaultModel;
+        }
+        if (state.embeddingProvider === 'google' && !validModels.includes(state.embeddingModel)) {
+          // Mantém modelos descobertos via API (são válidos mesmo fora da lista estática),
+          // mas nunca modelos Gemma nem o antigo id inexistente 'gemini-embedding-2-preview'.
+          const discovered: { id: string }[] = state.discoveredEmbeddingModels?.google ?? [];
+          const isDiscovered = discovered.some(m => m.id === state.embeddingModel);
+          const isBroken = !state.embeddingModel ||
+            state.embeddingModel === 'gemini-embedding-2-preview' ||
+            state.embeddingModel.startsWith('gemma');
+          if (isBroken || !isDiscovered) {
+            state.embeddingModel = embeddingProviders.google.defaultModel;
+          }
+        }
+        // Limpa modelos de embedding descobertos de provedores que não existem mais
+        if (state.discoveredEmbeddingModels?.gemma) {
+          const { gemma: _removed, ...rest } = state.discoveredEmbeddingModels;
+          state.discoveredEmbeddingModels = rest;
+        }
+        return state;
+      },
       partialize: (state) => ({
         aiProvider: state.aiProvider,
         apiKey: state.apiKey,

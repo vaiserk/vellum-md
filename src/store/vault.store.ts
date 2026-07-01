@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { EmbeddingService, extractTags, splitIntoPassages } from '../services/embedding.service';
+import { EmbeddingService, extractTags, splitIntoPassages, cleanMarkdown } from '../services/embedding.service';
 import { useSettingsStore } from './settings.store';
 
 export interface AIMessage {
@@ -265,45 +265,46 @@ export const useVaultStore = create<VaultState>((set, get) => ({
           passageIndex.set(file.path, cached.passages);
         } else {
           try {
-            // Embed the full document
-            const embedding = await EmbeddingService.embed(
-              content,
+            // Estratégia batch: documento inteiro + todas as passagens do arquivo
+            // em UMA requisição (batchEmbedContents). Um arquivo com N passagens
+            // custa 1 chamada em vez de N+1 — essencial para caber nos 100 RPM
+            // do free tier e reduzir o tempo de indexação em ~10x.
+            const cleanedDoc = cleanMarkdown(content);
+            if (!cleanedDoc) {
+              // Arquivo sem texto útil (só código/frontmatter) — não indexa
+              set({ indexingProgress: { current: i + 1, total: mdFiles.length } });
+              continue;
+            }
+            const rawPassages = splitIntoPassages(content);
+            const embeddings = await EmbeddingService.embedBatch(
+              [cleanedDoc, ...rawPassages],
               settings.embeddingProvider,
               settings.embeddingModel,
               effectiveKey
             );
+
+            const embedding = embeddings[0];
+            const embeddedPassages = rawPassages.map((text, p) => ({
+              text,
+              embedding: embeddings[p + 1],
+            }));
+
             embeddingIndex.set(file.path, embedding);
-            await new Promise(r => setTimeout(r, 50));
-
-            // Embed each passage for chunk-level retrieval
-            const rawPassages = splitIntoPassages(content);
-            const embeddedPassages: { text: string; embedding: number[] }[] = [];
-            for (const passageText of rawPassages) {
-              try {
-                const passageEmb = await EmbeddingService.embed(
-                  passageText,
-                  settings.embeddingProvider,
-                  settings.embeddingModel,
-                  effectiveKey
-                );
-                embeddedPassages.push({ text: passageText, embedding: passageEmb });
-                await new Promise(r => setTimeout(r, 50));
-              } catch {
-                // skip passages that fail to embed
-              }
-            }
-
             passageIndex.set(file.path, embeddedPassages);
             entries[file.path] = { mtime: file.mtime, embedding, passages: embeddedPassages };
           } catch (e: any) {
             const msg: string = e?.message ?? String(e);
             console.error(`Embedding failed for ${file.name}:`, msg);
-            // Só aborta em erros de autenticação — são sistêmicos e não adianta continuar
-            if (msg.includes('API_KEY_INVALID') || msg.includes('401') ||
-                (msg.includes('400') && msg.includes('API key'))) {
+            // Erros sistêmicos abortam a indexação — não adianta continuar arquivo a arquivo
+            const isAuthError = msg.includes('API_KEY_INVALID') || msg.includes('401') ||
+              (msg.includes('400') && msg.includes('API key'));
+            const isModelError = msg.includes('404') || msg.toLowerCase().includes('not found');
+            if (isAuthError || isModelError) {
               set({
                 embeddingStatus: 'error',
-                embeddingError: 'Chave de API inválida. Verifique as Configurações.',
+                embeddingError: isAuthError
+                  ? 'Chave de API inválida. Verifique as Configurações.'
+                  : `Modelo de embedding "${settings.embeddingModel}" indisponível. Selecione outro nas Configurações.`,
                 embeddingIndex, passageIndex, tagIndex, fileContents,
                 indexingProgress: { current: i + 1, total: mdFiles.length },
               });

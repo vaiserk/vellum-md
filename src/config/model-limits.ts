@@ -33,10 +33,9 @@ export const MODEL_RATE_LIMITS: Record<string, ModelRateLimit> = {
   'gemini-2.5-flash-lite': { rpm: 15,  tpm: 250_000,   rpd: 1500 },
   'gemini-2.0-flash':      { rpm: 15,  tpm: 1_000_000, rpd: 1500 },
 
-  // ── Embedding (Google) — valores confirmados via AI Studio free tier ────
-  // Gemini Embedding 1 (nome interno: gemini-embedding-1.0):
-  'gemini-embedding-2-preview': { rpm: 100, tpm: 30_000, rpd: 1_000 },
-  'text-embedding-004':         { rpm: 100, tpm: 30_000, rpd: 1_000 },
+  // ── Embedding (Google) — valores do AI Studio free tier ─────────────────
+  'gemini-embedding-001': { rpm: 100, tpm: 30_000, rpd: 1_000 },
+  'text-embedding-004':   { rpm: 100, tpm: 30_000, rpd: 1_000 },
 };
 
 /** Limite conservador para modelos não cadastrados */

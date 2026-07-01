@@ -1,6 +1,9 @@
 import { rateLimiter } from '../config/model-limits';
 
-export type EmbeddingProviderKey = 'google' | 'openai' | 'gemma';
+// Nota: modelos Gemma (gemma-*-it) são generativos e NÃO suportam embedContent —
+// a API retorna 400. Por isso Gemma não é oferecido como provedor de embedding;
+// para chat/geração de texto, Gemma continua disponível em ai.service.ts.
+export type EmbeddingProviderKey = 'google' | 'openai';
 
 export interface EmbeddingProviderInfo {
   name: string;
@@ -11,30 +14,15 @@ export interface EmbeddingProviderInfo {
 export const embeddingProviders: Record<EmbeddingProviderKey, EmbeddingProviderInfo> = {
   google: {
     name: 'Google (Gemini)',
-    defaultModel: 'gemini-embedding-2-preview',
-    availableModels: ['gemini-embedding-2-preview', 'text-embedding-004'],
+    // gemini-embedding-001 é o modelo de embedding GA da Gemini API;
+    // text-embedding-004 é o modelo legado (768 dims), mantido como alternativa.
+    defaultModel: 'gemini-embedding-001',
+    availableModels: ['gemini-embedding-001', 'text-embedding-004'],
   },
   openai: {
     name: 'OpenAI',
     defaultModel: 'text-embedding-3-small',
     availableModels: ['text-embedding-3-small', 'text-embedding-3-large'],
-  },
-  // Gemma via Google AI API — usa o mesmo endpoint embedContent do Google.
-  // Modelos Gemma instruction-tuned geram representações vetoriais via API.
-  // Use a mesma chave de API do AI Studio / Gemini.
-  gemma: {
-    name: 'Gemma (Google)',
-    defaultModel: 'gemma-4-e4b-it',
-    availableModels: [
-      'gemma-4-31b-it',
-      'gemma-4-26b-a4b-it',
-      'gemma-4-e4b-it',
-      'gemma-4-e2b-it',
-      'gemma-3-27b-it',
-      'gemma-3-12b-it',
-      'gemma-3-4b-it',
-      'gemma-3-1b-it',
-    ],
   },
 };
 
@@ -215,21 +203,32 @@ async function embedWithOpenAI(text: string, model: string, apiKey: string): Pro
   return data.data[0].embedding as number[];
 }
 
-// Gemma via Google AI API — usa o endpoint embedContent com modelos Gemma.
-// A mesma chave de API do AI Studio / Gemini é utilizada.
-async function embedWithGemma(
-  text: string, model: string, apiKey: string, taskType: 'RETRIEVAL_QUERY' | 'RETRIEVAL_DOCUMENT', attempt = 0
-): Promise<number[]> {
+// ── Batch embedding ──────────────────────────────────────────────────────────
+// Embeda vários textos em UMA requisição HTTP. É a estratégia central de
+// indexação: um arquivo (documento + N passagens) custa 1 requisição em vez de
+// N+1, o que reduz drasticamente o consumo de RPM do free tier (100 RPM) e o
+// tempo total de indexação do vault.
+
+/** Máximo de textos por requisição batchEmbedContents (limite da API Google). */
+const GOOGLE_BATCH_LIMIT = 100;
+
+async function embedBatchWithGoogle(
+  texts: string[], model: string, apiKey: string,
+  taskType: 'RETRIEVAL_QUERY' | 'RETRIEVAL_DOCUMENT', attempt = 0
+): Promise<number[][]> {
   await rateLimiter.throttle(model);
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:batchEmbedContents?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        content: { parts: [{ text }] },
-        taskType,
+        requests: texts.map(text => ({
+          model: `models/${model}`,
+          content: { parts: [{ text }] },
+          taskType,
+        })),
       }),
     }
   );
@@ -237,17 +236,38 @@ async function embedWithGemma(
   if (res.status === 429 && attempt < 3) {
     const body = await res.json().catch(() => ({}));
     const wait = parseRetryDelayMs(body);
-    console.warn(`[Embedding/Gemma] 429 — aguardando ${Math.ceil(wait / 1000)}s (${attempt + 1}/3)`);
+    console.warn(`[Embedding] 429 (batch) — aguardando ${Math.ceil(wait / 1000)}s (${attempt + 1}/3)`);
     await new Promise(r => setTimeout(r, wait));
-    return embedWithGemma(text, model, apiKey, taskType, attempt + 1);
+    return embedBatchWithGoogle(texts, model, apiKey, taskType, attempt + 1);
   }
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Gemma Embedding Error (${res.status}): ${err}`);
+    throw new Error(`Google Embedding Error (${res.status}): ${err}`);
   }
   const data = await res.json();
-  return data.embedding.values as number[];
+  return (data.embeddings as { values: number[] }[]).map(e => e.values);
+}
+
+async function embedBatchWithOpenAI(texts: string[], model: string, apiKey: string): Promise<number[][]> {
+  const res = await fetch('https://api.openai.com/v1/embeddings', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    // A API da OpenAI aceita array de textos nativamente
+    body: JSON.stringify({ model, input: texts }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`OpenAI Embedding Error (${res.status}): ${err}`);
+  }
+  const data = await res.json();
+  // A resposta preserva a ordem via campo index
+  return (data.data as { index: number; embedding: number[] }[])
+    .sort((a, b) => a.index - b.index)
+    .map(d => d.embedding);
 }
 
 export type EmbeddingMode = 'query' | 'document';
@@ -270,10 +290,34 @@ export class EmbeddingService {
         return embedWithGoogle(clean, model, apiKey, taskType);
       case 'openai':
         return embedWithOpenAI(clean, model, apiKey);
-      case 'gemma':
-        return embedWithGemma(clean, model, apiKey, taskType);
       default:
         throw new Error(`Provedor de embedding desconhecido: ${provider}`);
     }
+  }
+
+  /**
+   * Embeda vários textos JÁ LIMPOS (sem markdown) preservando a ordem.
+   * Divide em lotes conforme o limite da API. Usado pela indexação do vault:
+   * [documento, ...passagens] de um arquivo em uma única chamada.
+   */
+  static async embedBatch(
+    texts: string[],
+    provider: EmbeddingProviderKey,
+    model: string,
+    apiKey: string,
+    mode: EmbeddingMode = 'document'
+  ): Promise<number[][]> {
+    if (texts.length === 0) return [];
+    const taskType = mode === 'query' ? 'RETRIEVAL_QUERY' : 'RETRIEVAL_DOCUMENT';
+
+    const results: number[][] = [];
+    for (let i = 0; i < texts.length; i += GOOGLE_BATCH_LIMIT) {
+      const chunk = texts.slice(i, i + GOOGLE_BATCH_LIMIT);
+      const embeddings = provider === 'openai'
+        ? await embedBatchWithOpenAI(chunk, model, apiKey)
+        : await embedBatchWithGoogle(chunk, model, apiKey, taskType);
+      results.push(...embeddings);
+    }
+    return results;
   }
 }

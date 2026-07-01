@@ -17,7 +17,6 @@ export function SettingsModal() {
   const provider = settings.getProvider();
   const providers = settings.getAvailableProviders();
   const isGemmaProvider = settings.aiProvider === 'gemma';
-  const isGemmaEmbedding = settings.embeddingProvider === 'gemma';
 
   // Modelos descobertos — persistidos no store
   const discoveredModels = settings.discoveredAiModels[settings.aiProvider] ?? [];
@@ -26,7 +25,7 @@ export function SettingsModal() {
   const handleDiscoverEmbedModels = async () => {
     setDiscoveringEmbed(true);
     setDiscoverEmbedError('');
-    const filter = isGemmaEmbedding ? 'gemma' : '';
+    const filter = '';
 
     // Tenta as chaves disponíveis em ordem de preferência:
     // 1. embeddingApiKey (se preenchida e parecer chave Google — começa com 'AIza')
@@ -304,8 +303,8 @@ export function SettingsModal() {
                         ))
                     }
                   </select>
-                  {/* Botão de descoberta — para Gemma e Google (lista modelos com embedContent) */}
-                  {(isGemmaEmbedding || settings.embeddingProvider === 'google') && (
+                  {/* Botão de descoberta — Google (lista modelos com embedContent) */}
+                  {settings.embeddingProvider === 'google' && (
                     <button
                       onClick={handleDiscoverEmbedModels}
                       disabled={discoveringEmbed}
@@ -323,11 +322,6 @@ export function SettingsModal() {
                 {discoveredEmbedModels.length > 0 && (
                   <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                     ✓ {discoveredEmbedModels.length} modelo(s) encontrado(s) na sua conta.
-                  </span>
-                )}
-                {isGemmaEmbedding && discoveredEmbedModels.length === 0 && !discoverEmbedError && (
-                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                    Clique em "Descobrir modelos" para buscar os IDs reais disponíveis.
                   </span>
                 )}
               </div>
