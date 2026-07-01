@@ -15,39 +15,56 @@ import 'highlight.js/styles/github-dark.css';
 import './preview.css';
 import { useShallow } from 'zustand/react/shallow';
 import { useVaultStore } from '../../store/vault.store';
-import mermaid from 'mermaid';
 import { visit } from 'unist-util-visit';
 import { buildKnownNotes } from '../../utils/files';
 import { useDebouncedValue } from '../../utils/useDebouncedValue';
 
-// Initialize mermaid once at module level — NEVER call mermaid.initialize() inside a component.
-// Calling initialize() while another mermaid.render() is in progress resets internal state
-// and causes all concurrent diagrams to fail with "Syntax error" even when the code is valid.
-mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
+// ── Mermaid lazy-load ────────────────────────────────────────────────────────
+// O core do Mermaid (~600 kB min) saía no chunk principal e atrasava a abertura
+// do app mesmo para quem nunca usa diagramas. Agora o módulo só é baixado na
+// primeira vez que um bloco ```mermaid precisa ser renderizado.
+//
+// Regras preservadas do design anterior:
+// - initialize() NUNCA é chamado durante um render em andamento (reseta o estado
+//   singleton e quebra renders concorrentes com "Syntax error" espúrio);
+// - o tema é sincronizado por MutationObserver, uma vez por mudança de tema.
+type MermaidModule = typeof import('mermaid').default;
+let _mermaidPromise: Promise<MermaidModule> | null = null;
+let _lastMermaidTheme: 'dark' | 'default' | null = null;
 
-// Sync mermaid theme exactly once per theme change via MutationObserver.
-// This avoids calling initialize() inside React effects (which races with concurrent renders).
-let _lastMermaidTheme: string | null = null;
-function syncMermaidTheme() {
-  const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default';
-  if (theme === _lastMermaidTheme) return;
-  _lastMermaidTheme = theme;
-  mermaid.initialize({ startOnLoad: false, theme, securityLevel: 'loose' });
+function currentMermaidTheme(): 'dark' | 'default' {
+  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default';
 }
-if (typeof MutationObserver !== 'undefined') {
-  new MutationObserver(syncMermaidTheme).observe(document.documentElement, {
-    attributes: true, attributeFilter: ['data-theme'],
-  });
+
+function getMermaid(): Promise<MermaidModule> {
+  if (!_mermaidPromise) {
+    _mermaidPromise = import('mermaid').then(({ default: mermaid }) => {
+      _lastMermaidTheme = currentMermaidTheme();
+      mermaid.initialize({ startOnLoad: false, theme: _lastMermaidTheme, securityLevel: 'loose' });
+      if (typeof MutationObserver !== 'undefined') {
+        new MutationObserver(() => {
+          const theme = currentMermaidTheme();
+          if (theme === _lastMermaidTheme) return;
+          _lastMermaidTheme = theme;
+          mermaid.initialize({ startOnLoad: false, theme, securityLevel: 'loose' });
+        }).observe(document.documentElement, {
+          attributes: true, attributeFilter: ['data-theme'],
+        });
+      }
+      return mermaid;
+    });
+  }
+  return _mermaidPromise;
 }
-syncMermaidTheme();
 
 // Global render queue — serializes mermaid.render() calls because mermaid is a singleton
 // and concurrent renders interfere with each other.
-let mermaidQueue = Promise.resolve();
+let mermaidQueue: Promise<unknown> = Promise.resolve();
 function enqueueMermaidRender(id: string, code: string) {
   return new Promise<string>((resolve, reject) => {
     mermaidQueue = mermaidQueue.then(async () => {
       try {
+        const mermaid = await getMermaid();
         const { svg } = await mermaid.render(id, code);
         resolve(svg);
       } catch (err) {
@@ -81,6 +98,16 @@ function MermaidBlock({ code }: { code: string }) {
   }, [code]);
 
   if (error) return <div style={{ color: 'var(--error-color)', padding: '8px', fontSize: '12px' }}>{error}</div>;
+  if (!svg) {
+    // Skeleton enquanto o módulo mermaid carrega (lazy) e o diagrama renderiza
+    return (
+      <div className="mermaid-container" style={{ minHeight: '60px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+          Renderizando diagrama…
+        </span>
+      </div>
+    );
+  }
   return <div className="mermaid-container" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 

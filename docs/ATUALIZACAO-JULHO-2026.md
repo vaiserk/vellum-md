@@ -114,4 +114,28 @@ render** — digitar custava O(total de caracteres do vault) por tecla.
 
 ---
 
+## Etapa 3 — Abertura mais rápida: lazy-load do Mermaid
+
+**Problema:** `import mermaid from 'mermaid'` estático no Preview colocava o
+core do Mermaid dentro do chunk principal do app. Resultado: **2.048 kB**
+(608 kB gzip) carregados e avaliados na abertura, mesmo para quem nunca usa
+diagramas.
+
+**Correção:** o Mermaid agora é importado dinamicamente (`import('mermaid')`)
+na primeira vez que um bloco ` ```mermaid ` precisa ser renderizado. As regras
+de segurança do design anterior foram preservadas: `initialize()` nunca roda
+durante um render em andamento, e o tema é sincronizado por MutationObserver.
+Um skeleton "Renderizando diagrama…" cobre o intervalo de carregamento.
+
+**Resultado medido no build:**
+
+| Chunk | Antes | Depois |
+|---|---|---|
+| `index` (principal) | 2.048 kB (609 kB gzip) | **1.438 kB (461 kB gzip)** |
+| `mermaid.core` | — (embutido) | 610 kB, carregado **sob demanda** |
+
+**Arquivos:** `src/components/preview/Preview.tsx`.
+
+---
+
 *(as demais etapas são documentadas abaixo conforme implementadas)*
