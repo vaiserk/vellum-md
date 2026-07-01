@@ -34,6 +34,11 @@ export function Editor() {
   useEffect(() => {
     if (!editorRef.current) return;
 
+    // Captura o arquivo deste editor no closure (NÃO usar activeFileRef no cleanup:
+    // quando o cleanup roda, a ref já aponta para o PRÓXIMO arquivo, e o flush
+    // gravaria o conteúdo da nota antiga por cima da nova).
+    const fileForThisEditor = activeFile;
+
     const onUpdate = EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         const content = update.state.doc.toString();
@@ -173,9 +178,21 @@ export function Editor() {
     setEditorView(view);
 
     return () => {
+      // Flush do auto-save pendente: se havia um salvamento agendado (debounce),
+      // grava IMEDIATAMENTE antes de destruir o editor. Sem isso, trocar de nota
+      // dentro da janela do debounce descartava as últimas alterações digitadas.
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = undefined;
+        if (fileForThisEditor) {
+          const content = view.state.doc.toString();
+          window.electron.fs.writeFile(fileForThisEditor, content)
+            .then(() => setSaveStatus('saved'))
+            .catch(() => setSaveStatus('error'));
+        }
+      }
       view.destroy();
       setEditorView(null);
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, [activeFile]);
 
