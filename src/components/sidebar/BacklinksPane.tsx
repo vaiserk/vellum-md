@@ -1,14 +1,7 @@
 import { useMemo } from 'react';
-import { useVaultStore, FileNode } from '../../store/vault.store';
-
-function flattenFiles(nodes: FileNode[]): FileNode[] {
-  const result: FileNode[] = [];
-  for (const node of nodes) {
-    if (node.type === 'file') result.push(node);
-    if (node.children) result.push(...flattenFiles(node.children));
-  }
-  return result;
-}
+import { useShallow } from 'zustand/react/shallow';
+import { useVaultStore } from '../../store/vault.store';
+import { flattenFiles } from '../../utils/files';
 
 const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
 
@@ -26,7 +19,10 @@ function referencesNote(content: string, targetName: string): boolean {
 }
 
 export function BacklinksPane() {
-  const { activeFile, files, fileContents } = useVaultStore();
+  // Seletores granulares: não assina activeContent — não re-renderiza a cada tecla
+  const { activeFile, files, fileContents } = useVaultStore(useShallow(s => ({
+    activeFile: s.activeFile, files: s.files, fileContents: s.fileContents,
+  })));
 
   const currentName = activeFile?.split(/[/\\]/).pop()?.replace('.md', '') || '';
 

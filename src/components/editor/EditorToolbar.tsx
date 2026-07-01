@@ -1,9 +1,13 @@
 import { Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, Quote, List, Table, Image as ImageIcon, Link as LinkIcon, SquareFunction, GitBranch, Sparkles } from 'lucide-react';
 
+import { useShallow } from 'zustand/react/shallow';
 import { useVaultStore } from '../../store/vault.store';
 
 export function EditorToolbar() {
-  const { editorView, aiPanelOpen, setAiPanelOpen } = useVaultStore();
+  // useShallow: não re-renderiza a toolbar a cada tecla digitada
+  const { editorView, aiPanelOpen, setAiPanelOpen } = useVaultStore(useShallow(s => ({
+    editorView: s.editorView, aiPanelOpen: s.aiPanelOpen, setAiPanelOpen: s.setAiPanelOpen,
+  })));
 
   const handleAction = (action: string) => {
     if (!editorView) return;

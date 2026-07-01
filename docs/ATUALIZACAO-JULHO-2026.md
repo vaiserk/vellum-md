@@ -55,4 +55,63 @@ editor ser destruído. O arquivo de destino é capturado no *closure* do efeito
 
 ---
 
+## Etapa 2 — Digitação fluida: seletores granulares, memoização e debounce do preview
+
+Esta é a etapa de maior impacto na velocidade **percebida** do app.
+
+**Problema raiz:** todos os componentes usavam `useVaultStore()` **sem seletor**,
+o que significa "assinar a store inteira". Como `activeContent` muda a cada tecla
+digitada, **cada tecla re-renderizava o App inteiro** (que é a raiz da árvore
+React), a Sidebar, a StatusBar, o AIPanel, o BacklinksPane e todos os modais
+sempre montados. O agravante: a Sidebar recomputava `flattenFiles` + busca
+léxica sobre **todos os conteúdos do vault no corpo do componente, a cada
+render** — digitar custava O(total de caracteres do vault) por tecla.
+
+**Correções aplicadas:**
+
+1. **Seletores granulares com `useShallow`** (`zustand/react/shallow`) em:
+   `App`, `Sidebar`, `FileTree`, `BacklinksPane`, `Preview`, `AIPanel`,
+   `StatusBar`, `EditorToolbar`, `Editor`, `NewNoteModal`, `PromptModal`,
+   `ConfirmModal`. Cada componente agora assina **apenas os campos que usa** —
+   digitar não re-renderiza mais nada além do Editor, Preview e StatusBar
+   (que precisam do conteúdo por design).
+
+2. **AIPanel não assina mais a nota ativa**: o conteúdo é lido via
+   `getState()` apenas no momento do envio da mensagem. Digitar com o painel
+   de IA aberto não re-renderiza mais o histórico do chat.
+
+3. **Memoização na Sidebar**: `allFiles`, `lexicalResults`, `unifiedResults`,
+   `allTags` e `filesWithTag` agora são `useMemo` — só recomputam quando os
+   insumos mudam de fato.
+
+4. **Debounce do preview (200 ms)**: o pipeline unified (markdown→React) não
+   re-parseia mais o documento a cada tecla — só após pausa na digitação.
+   Trocar de nota atualiza o preview imediatamente (flush por `activeFile`).
+   O callback `toggleCheckbox` ganhou identidade estável (lê o estado via
+   `getState()`) para não invalidar o memo do conteúdo renderizado.
+
+5. **Editor**: o efeito de sincronização externa não faz mais
+   `doc.toString()` + comparação O(n) quando a mudança veio do próprio editor
+   (ref `lastFromEditorRef`).
+
+6. **Vault não é mais lido 2× ao indexar**: `loadTagsOnly` virou fallback
+   (só roda quando não há chave de embedding) — `buildEmbeddingIndex` já monta
+   tags e conteúdos na mesma passada.
+
+7. **Correção de race na busca semântica da Sidebar** (guard de geração):
+   duas buscas em voo podiam resolver fora de ordem e exibir resultados da
+   query antiga.
+
+8. **Deduplicação**: `flattenFiles` (4 cópias) e `buildKnownNotes` agora vivem
+   em `src/utils/files.ts` (fonte única).
+
+**Arquivos:** `src/App.tsx`, `src/components/sidebar/{Sidebar,FileTree,BacklinksPane}.tsx`,
+`src/components/preview/Preview.tsx`, `src/components/ai/AIPanel.tsx`,
+`src/components/statusbar/StatusBar.tsx`, `src/components/editor/{Editor,EditorToolbar}.tsx`,
+`src/components/modals/{NewNoteModal,PromptModal,ConfirmModal}.tsx`,
+`src/store/vault.store.ts`, `src/utils/files.ts` (novo),
+`src/utils/useDebouncedValue.ts` (novo).
+
+---
+
 *(as demais etapas são documentadas abaixo conforme implementadas)*

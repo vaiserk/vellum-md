@@ -2,7 +2,9 @@ import React, { useEffect, useRef } from 'react';
 import { useVaultStore } from '../../store/vault.store';
 
 export function ConfirmModal() {
-  const { confirmModal } = useVaultStore();
+  // Seletor de campo único: o modal fica sempre montado no App — sem isso,
+  // re-renderizava a cada tecla digitada no editor
+  const confirmModal = useVaultStore(s => s.confirmModal);
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {

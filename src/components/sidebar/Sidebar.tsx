@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useVaultStore, FileNode } from '../../store/vault.store';
 import { useSettingsStore } from '../../store/settings.store';
 import { FileTree } from './FileTree';
@@ -6,6 +7,7 @@ import { BacklinksPane } from './BacklinksPane';
 import { Sun, Moon, FilePlus, Settings } from 'lucide-react';
 import { EmbeddingService } from '../../services/embedding.service';
 import { topKSimilar, cosineSimilarity } from '../../services/similarity';
+import { flattenFiles } from '../../utils/files';
 
 type SidebarTab = 'files' | 'search' | 'tags' | 'backlinks';
 
@@ -27,18 +29,36 @@ interface UnifiedResult {
 }
 
 export function Sidebar() {
+  // Seletores granulares (useShallow): a Sidebar NÃO assina activeContent —
+  // antes, cada tecla digitada no editor re-renderizava a Sidebar inteira,
+  // recomputando flattenFiles + busca léxica sobre todo o vault.
   const {
     vaultPath, setVaultPath, setFiles, files, theme, setTheme, setActiveFile,
     embeddingIndex, passageIndex, embeddingStatus, indexingProgress, tagIndex, fileContents, loadTagsOnly,
     setNewNoteModalOpen,
-  } = useVaultStore();
-  const { setSettingsOpen, embeddingProvider, embeddingModel, getEmbeddingKey } = useSettingsStore();
+  } = useVaultStore(useShallow(s => ({
+    vaultPath: s.vaultPath, setVaultPath: s.setVaultPath, setFiles: s.setFiles,
+    files: s.files, theme: s.theme, setTheme: s.setTheme, setActiveFile: s.setActiveFile,
+    embeddingIndex: s.embeddingIndex, passageIndex: s.passageIndex,
+    embeddingStatus: s.embeddingStatus, indexingProgress: s.indexingProgress,
+    tagIndex: s.tagIndex, fileContents: s.fileContents, loadTagsOnly: s.loadTagsOnly,
+    setNewNoteModalOpen: s.setNewNoteModalOpen,
+  })));
+  const { setSettingsOpen, embeddingProvider, embeddingModel, getEmbeddingKey } = useSettingsStore(
+    useShallow(s => ({
+      setSettingsOpen: s.setSettingsOpen, embeddingProvider: s.embeddingProvider,
+      embeddingModel: s.embeddingModel, getEmbeddingKey: s.getEmbeddingKey,
+    }))
+  );
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
   const [searchQuery, setSearchQuery] = useState('');
   const [semanticResults, setSemanticResults] = useState<SemanticResult[]>([]);
   const [semanticLoading, setSemanticLoading] = useState(false);
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const semanticDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guard de geração: descarta respostas de buscas semânticas obsoletas
+  // (duas buscas em voo podiam resolver fora de ordem e exibir resultado antigo)
+  const searchGenRef = useRef(0);
 
   const handleOpenVault = async () => {
     const path = await window.electron.fs.openVault();
@@ -55,26 +75,19 @@ export function Sidebar() {
     setTheme(theme === 'dark' ? 'light' : 'dark');
   };
 
-  const flattenFiles = (nodes: FileNode[]): FileNode[] => {
-    const result: FileNode[] = [];
-    for (const node of nodes) {
-      if (node.type === 'file') result.push(node);
-      if (node.children) result.push(...flattenFiles(node.children));
-    }
-    return result;
-  };
+  // Memoizado: só recomputa quando a árvore de arquivos muda de fato
+  const allFiles = useMemo(() => flattenFiles(files), [files]);
 
-  const allFiles = flattenFiles(files);
-
-  // Lexical search — matches filename OR file content
-  const lexicalResults = searchQuery.trim()
-    ? allFiles.filter(f => {
-        const q = searchQuery.toLowerCase();
-        if (f.name.toLowerCase().includes(q)) return true;
-        const content = fileContents.get(f.path);
-        return content ? content.toLowerCase().includes(q) : false;
-      })
-    : [];
+  // Lexical search — memoizada (antes rodava a cada render, sobre todos os conteúdos)
+  const lexicalResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    return allFiles.filter(f => {
+      if (f.name.toLowerCase().includes(q)) return true;
+      const content = fileContents.get(f.path);
+      return content ? content.toLowerCase().includes(q) : false;
+    });
+  }, [searchQuery, allFiles, fileContents]);
 
   // Semantic search with debounce — always active when index is ready
   useEffect(() => {
@@ -84,6 +97,7 @@ export function Sidebar() {
     }
 
     if (semanticDebounce.current) clearTimeout(semanticDebounce.current);
+    const generation = ++searchGenRef.current;
 
     semanticDebounce.current = setTimeout(async () => {
       const effectiveKey = getEmbeddingKey();
@@ -98,6 +112,8 @@ export function Sidebar() {
           effectiveKey,
           'query'
         );
+        // Busca obsoleta (o usuário já digitou outra query) — descarta
+        if (generation !== searchGenRef.current) return;
         const results = topKSimilar(queryEmbedding, embeddingIndex, 10).filter(r => r.score > 0.5);
         setSemanticResults(
           results.map(r => {
@@ -145,8 +161,9 @@ export function Sidebar() {
   };
 
   // Merge lexical + semantic into a single ranked list (lexical has priority; duplicates skipped)
-  const unifiedResults: UnifiedResult[] = [];
-  if (searchQuery.trim()) {
+  const unifiedResults: UnifiedResult[] = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const results: UnifiedResult[] = [];
     const seen = new Set<string>();
     const q = searchQuery.toLowerCase();
 
@@ -168,29 +185,29 @@ export function Sidebar() {
           matchLen = q.length;
         }
       }
-      unifiedResults.push({ type: 'lexical', path: file.path, name: file.name, snippet, matchIdx, matchLen });
+      results.push({ type: 'lexical', path: file.path, name: file.name, snippet, matchIdx, matchLen });
     }
 
     for (const r of semanticResults) {
       if (!seen.has(r.path)) {
         seen.add(r.path);
-        unifiedResults.push({ type: 'semantic', path: r.path, name: r.name, score: r.score, snippet: r.bestPassage || null, matchIdx: -1, matchLen: 0 });
+        results.push({ type: 'semantic', path: r.path, name: r.name, score: r.score, snippet: r.bestPassage || null, matchIdx: -1, matchLen: 0 });
       }
     }
-  }
+    return results;
+  }, [searchQuery, lexicalResults, semanticResults, fileContents]);
 
   // Build tag list from tagIndex
-  const allTags = Array.from(
-    new Set([...tagIndex.values()].flat())
-  ).sort();
+  const allTags = useMemo(
+    () => Array.from(new Set([...tagIndex.values()].flat())).sort(),
+    [tagIndex]
+  );
 
   // Files that have the active tag
-  const filesWithTag = activeTag
-    ? allFiles.filter(f => {
-        const tags = tagIndex.get(f.path) ?? [];
-        return tags.includes(activeTag);
-      })
-    : [];
+  const filesWithTag = useMemo(() => {
+    if (!activeTag) return [];
+    return allFiles.filter(f => (tagIndex.get(f.path) ?? []).includes(activeTag));
+  }, [activeTag, allFiles, tagIndex]);
 
   const handleLoadTags = () => {
     loadTagsOnly();

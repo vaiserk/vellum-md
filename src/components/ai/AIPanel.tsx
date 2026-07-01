@@ -6,6 +6,7 @@ import remarkRehype from 'remark-rehype';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeReact from 'rehype-react';
 import * as prod from 'react/jsx-runtime';
+import { useShallow } from 'zustand/react/shallow';
 import { useVaultStore, AIMessage } from '../../store/vault.store';
 import { useSettingsStore } from '../../store/settings.store';
 import { AIService } from '../../services/ai.service';
@@ -42,8 +43,13 @@ const quickActions = [
 ];
 
 export function AIPanel({ onClose }: { onClose: () => void }) {
-  const { activeContent, activeFile, editorView, aiMessages, setAiMessages } = useVaultStore();
-  const { apiKey } = useSettingsStore();
+  // NÃO assina activeContent/activeFile: antes, cada tecla digitada no editor
+  // re-renderizava o painel inteiro (incluindo o histórico de mensagens).
+  // O conteúdo da nota é lido via getState() apenas no momento do envio.
+  const { editorView, aiMessages, setAiMessages } = useVaultStore(useShallow(s => ({
+    editorView: s.editorView, aiMessages: s.aiMessages, setAiMessages: s.setAiMessages,
+  })));
+  const apiKey = useSettingsStore(s => s.apiKey);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [streamingText, setStreamingText] = useState('');
@@ -54,6 +60,8 @@ export function AIPanel({ onClose }: { onClose: () => void }) {
   }, [aiMessages, streamingText]);
 
   const getSystemPrompt = () => {
+    // Lê a nota ativa no momento do envio (não via subscription — ver comentário acima)
+    const { activeContent, activeFile } = useVaultStore.getState();
     const title = activeFile?.split(/[/\\]/).pop()?.replace('.md', '') || 'Sem título';
     return `Você é um assistente de escrita especializado no VellumMD — um app de notas Markdown com recursos avançados de renderização.
 O usuário está editando: **${title}**

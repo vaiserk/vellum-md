@@ -13,9 +13,12 @@ import rehypeHighlight from 'rehype-highlight';
 import 'katex/dist/katex.min.css';
 import 'highlight.js/styles/github-dark.css';
 import './preview.css';
+import { useShallow } from 'zustand/react/shallow';
 import { useVaultStore } from '../../store/vault.store';
 import mermaid from 'mermaid';
 import { visit } from 'unist-util-visit';
+import { buildKnownNotes } from '../../utils/files';
+import { useDebouncedValue } from '../../utils/useDebouncedValue';
 
 // Initialize mermaid once at module level — NEVER call mermaid.initialize() inside a component.
 // Calling initialize() while another mermaid.render() is in progress resets internal state
@@ -211,18 +214,19 @@ function rehypeTaskCheckboxIndex() {
 }
 
 export function Preview() {
-  const { activeContent, theme, editorView, setActiveContent, activeFile, files } = useVaultStore();
-  const knownNotes = useMemo(() => {
-    const set = new Set<string>();
-    const walk = (nodes: any[]) => {
-      for (const n of nodes) {
-        if (n.type === 'file') set.add(n.name.replace(/\.md$/i, '').toLowerCase());
-        if (n.children) walk(n.children);
-      }
-    };
-    walk(files);
-    return set;
-  }, [files]);
+  const { activeContent, theme, editorView, activeFile, files } = useVaultStore(
+    useShallow(s => ({
+      activeContent: s.activeContent, theme: s.theme, editorView: s.editorView,
+      activeFile: s.activeFile, files: s.files,
+    }))
+  );
+
+  // Debounce do conteúdo que alimenta o pipeline markdown→React: digitar não
+  // re-parseia o documento a cada tecla (era a maior fonte de lag no modo split).
+  // Trocar de nota (flushKey=activeFile) atualiza o preview imediatamente.
+  const previewContent = useDebouncedValue(activeContent, 200, activeFile);
+
+  const knownNotes = useMemo(() => buildKnownNotes(files), [files]);
 
   const previewRef = useRef<HTMLDivElement>(null);
   const syncSourceRef = useRef<'editor' | 'preview' | null>(null);
@@ -267,7 +271,11 @@ export function Preview() {
     };
   }, [editorView]);
 
+  // Identidade estável (deps []): lê o estado atual via getState() no clique.
+  // Se dependesse de activeContent, mudaria a cada tecla e invalidaria o
+  // useMemo do renderedContent — anulando o debounce do preview.
   const toggleCheckbox = useCallback((idx: number, newChecked: boolean) => {
+    const { activeContent, activeFile, setActiveContent } = useVaultStore.getState();
     let count = 0;
     const updated = activeContent.replace(/^([ \t]*[-*+] \[)([ x])(\] )/gm, (_match, pre, _state, post) => {
       const result = count === idx ? `${pre}${newChecked ? 'x' : ' '}${post}` : `${pre}${_state}${post}`;
@@ -276,7 +284,7 @@ export function Preview() {
     });
     setActiveContent(updated);
     if (activeFile) window.electron.fs.writeFile(activeFile, updated);
-  }, [activeContent, activeFile, setActiveContent]);
+  }, []);
 
   const renderedContent = useMemo(() => {
     try {
@@ -342,12 +350,12 @@ export function Preview() {
           },
         } as any);
 
-      return processor.processSync(activeContent).result;
+      return processor.processSync(previewContent).result;
     } catch (e) {
       console.error(e);
       return <div>Error rendering preview</div>;
     }
-  }, [activeContent, theme, toggleCheckbox, knownNotes]);
+  }, [previewContent, theme, toggleCheckbox, knownNotes]);
 
   return (
     <div ref={previewRef} className="markdown-preview">

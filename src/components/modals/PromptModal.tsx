@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useVaultStore } from '../../store/vault.store';
 
 export function PromptModal() {
-  const { promptModal } = useVaultStore();
+  // Seletor de campo único: o modal fica sempre montado no App — sem isso,
+  // re-renderizava a cada tecla digitada no editor
+  const promptModal = useVaultStore(s => s.promptModal);
   const [value, setValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 

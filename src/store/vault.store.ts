@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { EmbeddingService, extractTags, splitIntoPassages, cleanMarkdown } from '../services/embedding.service';
 import { useSettingsStore } from './settings.store';
+import { flattenFiles } from '../utils/files';
 
 export interface AIMessage {
   role: 'user' | 'assistant' | 'system';
@@ -19,15 +20,6 @@ export interface FileNode {
 type LayoutMode = 'split' | 'editor-only' | 'preview-only';
 type SaveStatus = 'saved' | 'saving' | 'error' | 'idle';
 type EmbeddingStatus = 'idle' | 'indexing' | 'ready' | 'error';
-
-function flattenFiles(nodes: FileNode[]): FileNode[] {
-  const result: FileNode[] = [];
-  for (const node of nodes) {
-    if (node.type === 'file') result.push(node);
-    if (node.children) result.push(...flattenFiles(node.children));
-  }
-  return result;
-}
 
 interface VaultState {
   vaultPath: string | null;

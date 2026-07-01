@@ -1,9 +1,13 @@
 import { useState, useEffect, MouseEvent } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useVaultStore, FileNode } from '../../store/vault.store';
 import { File, Folder } from 'lucide-react';
 
 export function FileTree() {
-  const { files, activeFile, setActiveFile } = useVaultStore();
+  // useShallow: não re-renderiza a árvore a cada tecla digitada no editor
+  const { files, activeFile, setActiveFile } = useVaultStore(useShallow(s => ({
+    files: s.files, activeFile: s.activeFile, setActiveFile: s.setActiveFile,
+  })));
 
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, file: FileNode } | null>(null);
 

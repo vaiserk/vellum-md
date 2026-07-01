@@ -1,20 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useVaultStore } from '../../store/vault.store';
 import { useSettingsStore } from '../../store/settings.store';
 import { AIService } from '../../services/ai.service';
-
-function flattenFiles(nodes: any[]): any[] {
-  const result: any[] = [];
-  for (const node of nodes) {
-    if (node.type === 'file') result.push(node);
-    if (node.children) result.push(...flattenFiles(node.children));
-  }
-  return result;
-}
+import { flattenFiles } from '../../utils/files';
 
 export function NewNoteModal() {
-  const { vaultPath, files, tagIndex, setFiles, setActiveFile, newNoteModalOpen, setNewNoteModalOpen } = useVaultStore();
-  const { apiKey } = useSettingsStore();
+  // useShallow: o modal fica sempre montado no App — não deve re-renderizar a cada tecla
+  const { vaultPath, files, tagIndex, setFiles, setActiveFile, newNoteModalOpen, setNewNoteModalOpen } = useVaultStore(
+    useShallow(s => ({
+      vaultPath: s.vaultPath, files: s.files, tagIndex: s.tagIndex,
+      setFiles: s.setFiles, setActiveFile: s.setActiveFile,
+      newNoteModalOpen: s.newNoteModalOpen, setNewNoteModalOpen: s.setNewNoteModalOpen,
+    }))
+  );
+  const apiKey = useSettingsStore(s => s.apiKey);
 
   const [noteName, setNoteName] = useState('Nova Nota');
   const [aiPrompt, setAiPrompt] = useState('');
@@ -22,8 +22,8 @@ export function NewNoteModal() {
   const [generating, setGenerating] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
-  const allFiles = flattenFiles(files);
-  const allTags = Array.from(new Set([...tagIndex.values()].flat())).sort();
+  const allFiles = useMemo(() => flattenFiles(files), [files]);
+  const allTags = useMemo(() => Array.from(new Set([...tagIndex.values()].flat())).sort(), [tagIndex]);
   const aiAvailable = !!apiKey;
 
   useEffect(() => {

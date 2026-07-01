@@ -13,25 +13,44 @@ import { LinkSuggestion } from './components/ai/LinkSuggestion';
 import { PromptModal } from './components/modals/PromptModal';
 import { ConfirmModal } from './components/modals/ConfirmModal';
 import { NewNoteModal } from './components/modals/NewNoteModal';
+import { useShallow } from 'zustand/react/shallow';
 import { useVaultStore } from './store/vault.store';
 import { useSettingsStore } from './store/settings.store';
 
 function App() {
-  const { vaultPath, files, theme, layoutMode, commandPaletteOpen, setCommandPaletteOpen, aiPanelOpen, setAiPanelOpen, buildEmbeddingIndex, loadTagsOnly } = useVaultStore();
-  const { settingsOpen, setSettingsOpen, fontSize, fontFamily, editorMaxWidth, suggestConnections, getEmbeddingKey } = useSettingsStore();
+  // useShallow é CRÍTICO aqui: o App é a raiz da árvore — se ele assinar a store
+  // inteira (como antes), cada tecla digitada (activeContent) re-renderiza o app
+  // inteiro, anulando qualquer otimização feita nos filhos.
+  const { vaultPath, files, theme, layoutMode, commandPaletteOpen, setCommandPaletteOpen, aiPanelOpen, setAiPanelOpen, buildEmbeddingIndex, loadTagsOnly } = useVaultStore(
+    useShallow(s => ({
+      vaultPath: s.vaultPath, files: s.files, theme: s.theme, layoutMode: s.layoutMode,
+      commandPaletteOpen: s.commandPaletteOpen, setCommandPaletteOpen: s.setCommandPaletteOpen,
+      aiPanelOpen: s.aiPanelOpen, setAiPanelOpen: s.setAiPanelOpen,
+      buildEmbeddingIndex: s.buildEmbeddingIndex, loadTagsOnly: s.loadTagsOnly,
+    }))
+  );
+  const { settingsOpen, setSettingsOpen, fontSize, fontFamily, editorMaxWidth, suggestConnections, getEmbeddingKey } = useSettingsStore(
+    useShallow(s => ({
+      settingsOpen: s.settingsOpen, setSettingsOpen: s.setSettingsOpen,
+      fontSize: s.fontSize, fontFamily: s.fontFamily, editorMaxWidth: s.editorMaxWidth,
+      suggestConnections: s.suggestConnections, getEmbeddingKey: s.getEmbeddingKey,
+    }))
+  );
   const [exportOpen, setExportOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => {
     return !localStorage.getItem('vellum-onboarding-done');
   });
 
-  // Re-run loadTagsOnly whenever files change (keeps fileContents current for lexical search).
-  // Re-run buildEmbeddingIndex when files change so newly created/modified notes get indexed;
-  // the cache skips unchanged files, so only truly new/modified notes cost API calls.
+  // Re-run indexing whenever files change. buildEmbeddingIndex já lê todos os
+  // arquivos e monta tagIndex + fileContents — rodar loadTagsOnly junto lia o
+  // vault inteiro DUAS vezes a cada mudança. loadTagsOnly é apenas o fallback
+  // para quando não há chave de embedding configurada.
   useEffect(() => {
     if (!vaultPath || files.length === 0) return;
-    loadTagsOnly();
     if (suggestConnections && getEmbeddingKey()) {
       buildEmbeddingIndex();
+    } else {
+      loadTagsOnly();
     }
   }, [vaultPath, files]);
 

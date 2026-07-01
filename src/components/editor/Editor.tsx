@@ -6,6 +6,7 @@ import { markdown } from '@codemirror/lang-markdown';
 import { bracketMatching } from '@codemirror/language';
 import { closeBrackets } from '@codemirror/autocomplete';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+import { useShallow } from 'zustand/react/shallow';
 import { useVaultStore } from '../../store/vault.store';
 import { useSettingsStore } from '../../store/settings.store';
 import { wikilinkHighlighter } from './extensions/wikilink.ext';
@@ -20,8 +21,14 @@ export function Editor() {
   const {
     activeFile, activeContent, setActiveContent, setEditorView,
     setSaveStatus, setCursorPosition,
-  } = useVaultStore();
-  const { showLineNumbers, autoSaveDelay } = useSettingsStore();
+  } = useVaultStore(useShallow(s => ({
+    activeFile: s.activeFile, activeContent: s.activeContent,
+    setActiveContent: s.setActiveContent, setEditorView: s.setEditorView,
+    setSaveStatus: s.setSaveStatus, setCursorPosition: s.setCursorPosition,
+  })));
+  const { showLineNumbers, autoSaveDelay } = useSettingsStore(useShallow(s => ({
+    showLineNumbers: s.showLineNumbers, autoSaveDelay: s.autoSaveDelay,
+  })));
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
 
   // Refs let the auto-save closure always see the latest values without
@@ -30,6 +37,9 @@ export function Editor() {
   autoSaveDelayRef.current = autoSaveDelay;
   const activeFileRef = useRef(activeFile);
   activeFileRef.current = activeFile;
+  // Último conteúdo emitido PELO editor — permite pular o efeito de sync
+  // externo (que faz doc.toString() O(n)) quando a mudança veio do próprio editor.
+  const lastFromEditorRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!editorRef.current) return;
@@ -42,6 +52,7 @@ export function Editor() {
     const onUpdate = EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         const content = update.state.doc.toString();
+        lastFromEditorRef.current = content;
         setActiveContent(content);
         setSaveStatus('saving');
 
@@ -209,6 +220,9 @@ export function Editor() {
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
+    // Mudança originada no próprio editor — nada a sincronizar (evita
+    // doc.toString() + comparação O(n) a cada tecla digitada)
+    if (activeContent === lastFromEditorRef.current) return;
     const docContent = view.state.doc.toString();
     if (docContent !== activeContent) {
       view.dispatch({

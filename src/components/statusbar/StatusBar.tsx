@@ -1,8 +1,17 @@
 import React, { useMemo, useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useVaultStore } from '../../store/vault.store';
 
 export function StatusBar() {
-  const { activeContent, cursorPosition, saveStatus, layoutMode, typewriterMode, lastDeleted, setLastDeleted, vaultPath } = useVaultStore();
+  // useShallow: assina apenas os campos usados (re-render por tecla é inevitável
+  // aqui — os contadores de palavras/caracteres são ao vivo — mas é barato)
+  const { activeContent, cursorPosition, saveStatus, layoutMode, typewriterMode, lastDeleted, setLastDeleted, vaultPath } = useVaultStore(
+    useShallow(s => ({
+      activeContent: s.activeContent, cursorPosition: s.cursorPosition,
+      saveStatus: s.saveStatus, layoutMode: s.layoutMode, typewriterMode: s.typewriterMode,
+      lastDeleted: s.lastDeleted, setLastDeleted: s.setLastDeleted, vaultPath: s.vaultPath,
+    }))
+  );
   const [undoCountdown, setUndoCountdown] = React.useState(10);
 
   useEffect(() => {
