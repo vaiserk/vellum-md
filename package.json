@@ -30,6 +30,7 @@
     "remark-math": "^6.0.0",
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.0",
+    "reveal.js": "^6.0.1",
     "unified": "^11.0.4",
     "zustand": "^4.5.2"
   },

@@ -138,4 +138,49 @@ Um skeleton "Renderizando diagrama…" cobre o intervalo de carregamento.
 
 ---
 
-*(as demais etapas são documentadas abaixo conforme implementadas)*
+## Etapa 4 — Exportações offline, PDF determinístico e escape de títulos
+
+**Problema 1 (offline):** PDF, slides e site carregavam KaTeX, highlight.js,
+Mermaid, Reveal.js e fontes de **CDNs**. Sem internet, o PDF saía sem fórmulas
+e sem diagramas — contradizendo o requisito do projeto de renderização local.
+
+**Correção:** todos os assets agora vêm das dependências locais
+(`require.resolve` + leitura do arquivo — funciona em dev e dentro do asar no
+app empacotado):
+- **PDF**: KaTeX (CSS + fontes woff2 em data URIs), highlight.js e Mermaid
+  **inline** no HTML; fontes do sistema (Georgia) no lugar do Google Fonts.
+  O HTML passa de 2 MB com o Mermaid inline, então a página é carregada por
+  arquivo temporário (`loadFile`) em vez de data URL (limite do Chromium).
+- **Slides**: `reveal.js` virou dependência local; o HTML exportado é
+  **autocontido** (reveal + katex + highlight + mermaid inline) e abre offline
+  em qualquer máquina. Whitelist de temas evita path traversal.
+- **Site estático**: pasta `assets/` (katex.min.css + fontes, github.min.css,
+  mermaid.min.js) copiada junto ao site; páginas referenciam relativamente.
+
+**Problema 2 (PDF lento/incompleto):** espera fixa de 3,5 s pela renderização —
+lenta para notas simples e insuficiente para notas cheias de diagramas.
+
+**Correção:** o HTML define `window.__renderReady`, uma promise que resolve
+quando `mermaid.run()` termina **e** `document.fonts.ready` resolve. O processo
+principal aguarda esse sinal (teto de 15 s) antes do `printToPDF`.
+
+**Problema 3:** títulos de notas injetados sem escape no HTML exportado —
+nota com `<` ou `&` no nome quebrava a página.
+
+**Correção:** `escapeHtml()` em títulos, navegação e `<title>`.
+
+**Arquivos:** `electron/handlers/export.handler.ts`, `package.json` (+ `reveal.js`).
+
+---
+
+## Pendências (próximas etapas planejadas, ainda não implementadas)
+
+- **Etapa 5 (P3):** embeddings com `outputDimensionality: 768` — cache 4× menor
+  e busca 4× mais rápida. Exige invalidação do cache por dimensão.
+- **Etapa 6 (F2+P6):** religar `latexInlinePreview`/`mermaidInlinePreview` no
+  editor (código pronto, nunca adicionado ao array `extensions`), corrigindo
+  antes o scan de documento inteiro em `mermaid.ext.ts` (usar `visibleRanges`).
+- **Etapa 7:** file watcher do vault (promessa do TCC de "monitoramento em
+  tempo real" — filtrar `.vellum/` para não criar loop com o cache).
+- **Etapa 8:** configuração do `electron-builder` (appId, targets, ícone) para
+  gerar instaladores de verdade — fase 5 do plano do TCC.

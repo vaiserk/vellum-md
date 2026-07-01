@@ -1,6 +1,62 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
+
+// ─── Assets locais (offline) ──────────────────────────────────────────────────
+// Lê arquivos das dependências de produção via require.resolve — funciona em
+// dev (node_modules) e no app empacotado (asar). Elimina a dependência de CDNs:
+// as exportações agora funcionam 100% offline, cumprindo o requisito do projeto
+// de que LaTeX e Mermaid renderizem localmente.
+
+function readModuleFile(spec: string): string {
+  return fs.readFileSync(require.resolve(spec), 'utf-8');
+}
+
+let _katexCssInline: string | null = null;
+/** CSS do KaTeX com as fontes woff2 embutidas como data URIs (cacheado). */
+function getKatexCssInline(): string {
+  if (_katexCssInline) return _katexCssInline;
+  const cssPath = require.resolve('katex/dist/katex.min.css');
+  const fontsDir = path.join(path.dirname(cssPath), 'fonts');
+  let css = fs.readFileSync(cssPath, 'utf-8');
+  // Chromium usa woff2; as demais variantes (woff/ttf) podem falhar silenciosamente
+  css = css.replace(/url\(fonts\/([^)]+\.woff2)\)/g, (match, fontFile) => {
+    try {
+      const data = fs.readFileSync(path.join(fontsDir, fontFile));
+      return `url(data:font/woff2;base64,${data.toString('base64')})`;
+    } catch {
+      return match;
+    }
+  });
+  _katexCssInline = css;
+  return css;
+}
+
+let _mermaidJs: string | null = null;
+function getMermaidJs(): string {
+  if (!_mermaidJs) _mermaidJs = readModuleFile('mermaid/dist/mermaid.min.js');
+  return _mermaidJs;
+}
+
+function getHljsCss(dark = false): string {
+  return readModuleFile(`highlight.js/styles/${dark ? 'github-dark' : 'github'}.min.css`);
+}
+
+/** Escapa texto para uso seguro em HTML (títulos de notas podem conter <, & etc.). */
+function escapeHtml(s: string): string {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Temas válidos do reveal.js — whitelist evita path traversal via nome de tema
+const REVEAL_THEMES = new Set([
+  'black', 'white', 'league', 'beige', 'night', 'serif',
+  'simple', 'solarized', 'moon', 'dracula', 'sky', 'blood',
+]);
 
 // ─── Shared callout CSS (used in PDF, slides, site) ───────────────────────────
 const CALLOUT_CSS = `
@@ -21,10 +77,10 @@ const CALLOUT_CSS = `
 `;
 
 // ─── Shared PDF CSS ────────────────────────────────────────────────────────────
+// Fontes do sistema (Georgia/Cambria) em vez de Google Fonts — exportação offline.
 const PDF_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400&display=swap');
   body {
-    font-family: 'Lora', Georgia, serif;
+    font-family: Georgia, Cambria, 'Times New Roman', serif;
     font-size: 12pt;
     line-height: 1.75;
     color: #1a1a1a;
@@ -36,7 +92,7 @@ const PDF_CSS = `
   h2 { font-size: 1.5em; margin-top: 1em; }
   h3 { font-size: 1.25em; margin-top: 1em; }
   code {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: Consolas, 'Cascadia Mono', monospace;
     font-size: 0.85em;
     background: #f4f4f4;
     padding: 2px 4px;
@@ -65,30 +121,37 @@ const PDF_CSS = `
   ${CALLOUT_CSS}
 `;
 
-// ─── Build HTML for PDF / Site pages ──────────────────────────────────────────
+// ─── Build HTML for PDF ───────────────────────────────────────────────────────
+// Todos os assets inline (KaTeX css+fontes, highlight.js css, mermaid js) —
+// nenhuma requisição de rede. window.__renderReady sinaliza de forma
+// DETERMINÍSTICA quando fontes e diagramas terminaram de renderizar (substitui
+// a antiga espera fixa de 3,5s que era lenta para notas simples e insuficiente
+// para notas com muitos diagramas).
 function buildPdfHtml(bodyContent: string): string {
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css" rel="stylesheet">
+  <style>${getKatexCssInline()}</style>
+  <style>${getHljsCss(false)}</style>
   <style>${PDF_CSS}</style>
 </head>
 <body>
   ${bodyContent}
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>${getMermaidJs()}</script>
   <script>
     mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
-    // Convert <pre><code class="language-mermaid"> blocks into .mermaid divs
-    document.querySelectorAll('pre code.language-mermaid, pre code[class*="language-mermaid"]').forEach(function(el) {
-      var div = document.createElement('div');
-      div.className = 'mermaid';
-      div.textContent = el.textContent;
-      el.closest('pre').replaceWith(div);
-    });
-    mermaid.run({ querySelector: '.mermaid' });
+    window.__renderReady = (async function() {
+      document.querySelectorAll('pre code.language-mermaid, pre code[class*="language-mermaid"]').forEach(function(el) {
+        var div = document.createElement('div');
+        div.className = 'mermaid';
+        div.textContent = el.textContent;
+        el.closest('pre').replaceWith(div);
+      });
+      try { await mermaid.run({ querySelector: '.mermaid' }); } catch (e) {}
+      try { await document.fonts.ready; } catch (e) {}
+      return true;
+    })();
   </script>
 </body>
 </html>`;
@@ -102,6 +165,8 @@ export function setupExportHandlers() {
     orientation: string;
     filePath?: string;
   }) => {
+    let tmpPath: string | null = null;
+    let win: BrowserWindow | null = null;
     try {
       let savePath = options.filePath;
       if (!savePath) {
@@ -114,18 +179,26 @@ export function setupExportHandlers() {
         savePath = result.filePath;
       }
 
-      const win = new BrowserWindow({
+      win = new BrowserWindow({
         show: false,
         width: 900,
         height: 1200,
         webPreferences: { offscreen: true },
       });
 
+      // Arquivo temporário em vez de data: URL — com o mermaid inline o HTML
+      // passa de 2 MB, acima do limite de data URLs do Chromium.
       const fullHtml = buildPdfHtml(options.htmlContent);
-      await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(fullHtml));
+      tmpPath = path.join(os.tmpdir(), `vellum-pdf-${Date.now()}.html`);
+      fs.writeFileSync(tmpPath, fullHtml, 'utf-8');
+      await win.loadFile(tmpPath);
 
-      // Wait for mermaid to render (fonts + diagrams)
-      await new Promise(r => setTimeout(r, 3500));
+      // Espera determinística: fontes + diagramas prontos (teto de 15s)
+      await Promise.race([
+        win.webContents.executeJavaScript('window.__renderReady'),
+        new Promise(r => setTimeout(r, 15000)),
+      ]).catch(() => { /* segue mesmo assim */ });
+      await new Promise(r => setTimeout(r, 150)); // margem para o layout assentar
 
       const pageSize = options.format === 'Letter' ? 'Letter' :
                        options.format === 'A5' ? 'A5' : 'A4';
@@ -138,15 +211,18 @@ export function setupExportHandlers() {
       });
 
       fs.writeFileSync(savePath, pdfData);
-      win.destroy();
-
       return { success: true, path: savePath };
     } catch (e: any) {
       return { success: false, error: e.message };
+    } finally {
+      win?.destroy();
+      if (tmpPath) { try { fs.unlinkSync(tmpPath); } catch { /* ignora */ } }
     }
   });
 
   // ─── Export Slides (Reveal.js) ─────────────────────────────────────────────
+  // reveal.js agora é dependência local: o HTML gerado é 100% autocontido
+  // (reveal + katex + highlight + mermaid inline) e abre offline em qualquer máquina.
   ipcMain.handle('export:slides', async (_, options: {
     htmlSlides: string[];   // Each element = HTML of one slide
     theme: string;
@@ -166,6 +242,7 @@ export function setupExportHandlers() {
         savePath = result.filePath;
       }
 
+      const theme = REVEAL_THEMES.has(options.theme) ? options.theme : 'black';
       const slideSections = options.htmlSlides
         .map(html => `<section>${html}</section>`)
         .join('\n');
@@ -175,12 +252,12 @@ export function setupExportHandlers() {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${options.title || 'Apresentação'}</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/${options.theme || 'black'}.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+  <title>${escapeHtml(options.title || 'Apresentação')}</title>
+  <style>${readModuleFile('reveal.js/dist/reset.css')}</style>
+  <style>${readModuleFile('reveal.js/dist/reveal.css')}</style>
+  <style>${readModuleFile(`reveal.js/dist/theme/${theme}.css`)}</style>
+  <style>${getKatexCssInline()}</style>
+  <style>${getHljsCss(true)}</style>
   <style>
     .reveal pre { font-size: 0.75em; box-shadow: none; }
     .reveal pre code.hljs { padding: 0.75em 1em; border-radius: 6px; }
@@ -212,8 +289,8 @@ export function setupExportHandlers() {
       ${slideSections}
     </div>
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>${readModuleFile('reveal.js/dist/reveal.js')}</script>
+  <script>${getMermaidJs()}</script>
   <script>
     mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
 
@@ -271,6 +348,18 @@ export function setupExportHandlers() {
       }
       fs.mkdirSync(outDir, { recursive: true });
 
+      // Assets locais copiados para o site — nada de CDN, o site abre offline
+      const assetsDir = path.join(outDir, 'assets');
+      fs.mkdirSync(path.join(assetsDir, 'fonts'), { recursive: true });
+      const katexCssPath = require.resolve('katex/dist/katex.min.css');
+      fs.copyFileSync(katexCssPath, path.join(assetsDir, 'katex.min.css'));
+      const katexFontsDir = path.join(path.dirname(katexCssPath), 'fonts');
+      for (const f of fs.readdirSync(katexFontsDir)) {
+        fs.copyFileSync(path.join(katexFontsDir, f), path.join(assetsDir, 'fonts', f));
+      }
+      fs.copyFileSync(require.resolve('highlight.js/styles/github.min.css'), path.join(assetsDir, 'github.min.css'));
+      fs.copyFileSync(require.resolve('mermaid/dist/mermaid.min.js'), path.join(assetsDir, 'mermaid.min.js'));
+
       const SITE_CSS = `
         :root { --accent: #6C63FF; --bg: #ffffff; --surface: #f7f7fb; --text: #1a1a2e; --border: #e0e0e8; --secondary: #6b7280; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -301,29 +390,16 @@ export function setupExportHandlers() {
         .mermaid { display: flex; justify-content: center; margin: 1.5rem 0; }
         .mermaid svg { max-width: 100%; }
         .katex-display { overflow: visible !important; margin: 1.25rem 0; text-align: center; }
-        /* Callouts */
-        .callout { border-left: 4px solid; border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 12px 0; }
-        .callout-title { font-weight: 700; font-size: 0.9em; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
-        .callout-note    { border-color: #4a9eff; background: rgba(74,158,255,0.08); }
-        .callout-note    .callout-title { color: #4a9eff; }
-        .callout-tip     { border-color: #3fb950; background: rgba(63,185,80,0.08); }
-        .callout-tip     .callout-title { color: #3fb950; }
-        .callout-warning { border-color: #d29922; background: rgba(210,153,34,0.08); }
-        .callout-warning .callout-title { color: #d29922; }
-        .callout-caution { border-color: #e3a14f; background: rgba(227,161,79,0.08); }
-        .callout-caution .callout-title { color: #e3a14f; }
-        .callout-danger  { border-color: #f85149; background: rgba(248,81,73,0.08); }
-        .callout-danger  .callout-title { color: #f85149; }
-        .callout-important { border-color: #a371f7; background: rgba(163,113,247,0.08); }
-        .callout-important .callout-title { color: #a371f7; }
+        ${CALLOUT_CSS}
         /* Wikilinks */
         .wiki-link { color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent); }
         .wiki-link:hover { border-bottom-style: solid; }
         @media (max-width: 768px) { .layout { grid-template-columns: 1fr; } nav { position: static; height: auto; } main { padding: 1.5rem; } }
       `;
 
+      const vaultTitle = escapeHtml(options.vaultName || 'Notas');
       const navLinks = options.pages
-        .map(p => `<li><a href="${p.slug}.html">${p.title}</a></li>`)
+        .map(p => `<li><a href="${p.slug}.html">${escapeHtml(p.title)}</a></li>`)
         .join('\n');
 
       const buildPageHtml = (page: { title: string; slug: string; html: string }) => `<!DOCTYPE html>
@@ -331,25 +407,25 @@ export function setupExportHandlers() {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${page.title}${options.vaultName ? ' — ' + options.vaultName : ''}</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
+  <title>${escapeHtml(page.title)}${options.vaultName ? ' — ' + vaultTitle : ''}</title>
+  <link rel="stylesheet" href="assets/katex.min.css">
+  <link rel="stylesheet" href="assets/github.min.css">
   <style>${SITE_CSS}</style>
 </head>
 <body>
   <div class="layout">
     <nav>
-      <h2>📓 ${options.vaultName || 'Notas'}</h2>
+      <h2>📓 ${vaultTitle}</h2>
       <ul>${navLinks}</ul>
     </nav>
     <main>
       <article>
-        <h1>${page.title}</h1>
+        <h1>${escapeHtml(page.title)}</h1>
         ${page.html}
       </article>
     </main>
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script src="assets/mermaid.min.js"></script>
   <script>
     mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
     document.querySelectorAll('pre code.language-mermaid').forEach(function(el) {
@@ -384,11 +460,11 @@ export function setupExportHandlers() {
 </head>
 <body>
 <div class="layout">
-  <nav><h2>📓 ${options.vaultName || 'Notas'}</h2><ul>${navLinks}</ul></nav>
+  <nav><h2>📓 ${vaultTitle}</h2><ul>${navLinks}</ul></nav>
   <main><article>
-    <h1>📓 ${options.vaultName || 'Notas'}</h1>
+    <h1>📓 ${vaultTitle}</h1>
     <p>Selecione uma nota na barra lateral para começar a leitura.</p>
-    <ul>${options.pages.map(p => `<li><a href="${p.slug}.html">${p.title}</a></li>`).join('\n')}</ul>
+    <ul>${options.pages.map(p => `<li><a href="${p.slug}.html">${escapeHtml(p.title)}</a></li>`).join('\n')}</ul>
   </article></main>
 </div>
 <script>
