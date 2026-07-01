@@ -89,7 +89,9 @@ export function FileTree() {
     if (confirm) {
       const { vaultPath, setFiles, setLastDeleted } = useVaultStore.getState();
       setLastDeleted({ name: file.name, path: file.path });
-      await window.electron.fs.deleteFile(file.path);
+      // vaultPath garante que a lixeira fique na raiz do vault (restaurável),
+      // mesmo para notas dentro de subpastas
+      await window.electron.fs.deleteFile(file.path, vaultPath ?? undefined);
       if (vaultPath) {
         const updatedFiles = await window.electron.fs.readDir(vaultPath);
         setFiles(updatedFiles);

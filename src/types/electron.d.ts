@@ -10,7 +10,7 @@ declare global {
         writeFile: (filePath: string, content: string) => Promise<boolean>;
         createFile: (filePath: string) => Promise<boolean>;
         renameFile: (oldPath: string, newPath: string) => Promise<boolean>;
-        deleteFile: (filePath: string) => Promise<boolean>;
+        deleteFile: (filePath: string, vaultPath?: string) => Promise<boolean>;
         restoreLastDeleted: (vaultPath: string) => Promise<boolean>;
         readEmbeddingCache: (vaultPath: string) => Promise<EmbeddingCache>;
         writeEmbeddingCache: (vaultPath: string, data: EmbeddingCache) => Promise<boolean>;

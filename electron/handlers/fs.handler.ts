@@ -73,16 +73,25 @@ export function setupFsHandlers(ipcMain: Electron.IpcMain, dialog: Electron.Dial
     }
   });
 
-  ipcMain.handle('fs:deleteFile', async (_, filePath: string) => {
+  // Separador usado para codificar o caminho relativo no nome do arquivo na lixeira
+  // (nomes de arquivo não podem conter / ou \). Permite restaurar notas de subpastas
+  // ao local original.
+  const TRASH_SEP = '__SLASH__';
+
+  ipcMain.handle('fs:deleteFile', async (_, filePath: string, vaultPath?: string) => {
     try {
-      // Move to a .vellum/trash folder instead of permanent delete
-      const dir = path.dirname(filePath);
-      const trashDir = path.join(dir, '.vellum', 'trash');
+      // Move para a lixeira NA RAIZ DO VAULT (não na pasta do arquivo) — assim
+      // notas de subpastas também aparecem em restoreLastDeleted e não ficam
+      // diretórios .vellum espalhados pelo vault.
+      const baseDir = vaultPath || path.dirname(filePath);
+      const trashDir = path.join(baseDir, '.vellum', 'trash');
       if (!fs.existsSync(trashDir)) {
         fs.mkdirSync(trashDir, { recursive: true });
       }
-      const fileName = path.basename(filePath);
-      fs.renameSync(filePath, path.join(trashDir, `${Date.now()}_${fileName}`));
+      // Codifica o caminho relativo ao vault no nome, para restauração no local original
+      const relPath = vaultPath ? path.relative(vaultPath, filePath) : path.basename(filePath);
+      const encoded = relPath.split(path.sep).join(TRASH_SEP);
+      fs.renameSync(filePath, path.join(trashDir, `${Date.now()}_${encoded}`));
       return true;
     } catch (e) {
       console.error('Delete error:', e);
@@ -107,12 +116,18 @@ export function setupFsHandlers(ipcMain: Electron.IpcMain, dialog: Electron.Dial
         }
       }
 
-      // Remove the timestamp prefix to get the original name
-      // Name was: `${Date.now()}_${fileName}`
+      // Nome na lixeira: `${timestamp}_${relPath com separadores codificados}`
       const originalNameMatch = latestFile.match(/^\d+_(.+)$/);
-      const originalName = originalNameMatch ? originalNameMatch[1] : latestFile;
+      const encoded = originalNameMatch ? originalNameMatch[1] : latestFile;
+      const relPath = encoded.split(TRASH_SEP).join(path.sep);
 
-      fs.renameSync(path.join(trashDir, latestFile), path.join(vaultPath, originalName));
+      // Restaura no local original, recriando subpastas se necessário
+      const targetPath = path.join(vaultPath, relPath);
+      const targetDir = path.dirname(targetPath);
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      fs.renameSync(path.join(trashDir, latestFile), targetPath);
       return true;
     } catch (e) {
       console.error('Restore error:', e);

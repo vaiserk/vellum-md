@@ -8,7 +8,7 @@ contextBridge.exposeInMainWorld('electron', {
     writeFile: (filePath: string, content: string) => ipcRenderer.invoke('fs:writeFile', filePath, content),
     createFile: (filePath: string) => ipcRenderer.invoke('fs:createFile', filePath),
     renameFile: (oldPath: string, newPath: string) => ipcRenderer.invoke('fs:renameFile', oldPath, newPath),
-    deleteFile: (filePath: string) => ipcRenderer.invoke('fs:deleteFile', filePath),
+    deleteFile: (filePath: string, vaultPath?: string) => ipcRenderer.invoke('fs:deleteFile', filePath, vaultPath),
     restoreLastDeleted: (vaultPath: string) => ipcRenderer.invoke('fs:restoreLastDeleted', vaultPath),
     readEmbeddingCache: (vaultPath: string) => ipcRenderer.invoke('fs:readEmbeddingCache', vaultPath),
     writeEmbeddingCache: (vaultPath: string, data: any) => ipcRenderer.invoke('fs:writeEmbeddingCache', vaultPath, data),

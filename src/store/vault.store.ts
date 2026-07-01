@@ -237,10 +237,18 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       const mdFiles = flattenFiles(files).filter(f => f.name.endsWith('.md'));
       set({ indexingProgress: { current: 0, total: mdFiles.length } });
 
+      // Poda entradas órfãs: arquivos deletados/renomeados desde a última indexação
+      // ficariam no cache para sempre, fazendo o embeddings.json crescer sem limite.
+      const currentPaths = new Set(mdFiles.map(f => f.path));
+      for (const cachedPath of Object.keys(entries)) {
+        if (!currentPaths.has(cachedPath)) delete entries[cachedPath];
+      }
+
       const embeddingIndex = new Map<string, number[]>();
       const passageIndex = new Map<string, { text: string; embedding: number[] }[]>();
       const tagIndex = new Map<string, string[]>();
       const fileContents = new Map<string, string>();
+      let newlyEmbedded = 0;
 
       for (let i = 0; i < mdFiles.length; i++) {
         const file = mdFiles[i];
@@ -292,6 +300,19 @@ export const useVaultStore = create<VaultState>((set, get) => ({
             embeddingIndex.set(file.path, embedding);
             passageIndex.set(file.path, embeddedPassages);
             entries[file.path] = { mtime: file.mtime, embedding, passages: embeddedPassages };
+
+            // Grava o cache incrementalmente a cada 10 arquivos embedados —
+            // se o app fechar no meio de uma indexação longa, o progresso
+            // (e o custo de API já pago) não é perdido.
+            newlyEmbedded++;
+            if (newlyEmbedded % 10 === 0) {
+              await window.electron.fs.writeEmbeddingCache(vaultPath, {
+                version: 1,
+                provider: settings.embeddingProvider,
+                model: settings.embeddingModel,
+                entries,
+              });
+            }
           } catch (e: any) {
             const msg: string = e?.message ?? String(e);
             console.error(`Embedding failed for ${file.name}:`, msg);
