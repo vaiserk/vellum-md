@@ -54,6 +54,23 @@ function App() {
     }
   }, [vaultPath, files]);
 
+  // Monitoramento em tempo real: alterações externas ao vault (outro editor,
+  // sync de nuvem) atualizam a árvore de arquivos automaticamente. O watcher
+  // ignora .vellum/ (sem loop com o cache) e o setFiles resultante dispara a
+  // reindexação incremental — só arquivos realmente modificados custam API.
+  useEffect(() => {
+    if (!vaultPath) return;
+    window.electron.fs.watchVault(vaultPath);
+    const unsubscribe = window.electron.fs.onVaultChanged(async () => {
+      const updated = await window.electron.fs.readDir(vaultPath);
+      useVaultStore.getState().setFiles(updated);
+    });
+    return () => {
+      unsubscribe();
+      window.electron.fs.unwatchVault();
+    };
+  }, [vaultPath]);
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     document.documentElement.style.setProperty('--font-family', fontFamily === 'Inter' ? '"Inter", sans-serif' : fontFamily === 'Lora' ? '"Lora", serif' : fontFamily === 'JetBrains Mono' ? '"JetBrains Mono", monospace' : '"Roboto", sans-serif');

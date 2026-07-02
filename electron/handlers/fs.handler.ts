@@ -162,6 +162,46 @@ export function setupFsHandlers(ipcMain: Electron.IpcMain, dialog: Electron.Dial
     }
   });
 
+  // ── Monitoramento em tempo real do vault ──────────────────────────────────
+  // Cumpre o requisito de "monitoramento em tempo real de alterações": mudanças
+  // feitas por fora do app (outro editor, sync de nuvem) atualizam a árvore.
+  let vaultWatcher: fs.FSWatcher | null = null;
+  let watchDebounce: NodeJS.Timeout | null = null;
+
+  ipcMain.handle('fs:watchVault', (event, vaultPath: string) => {
+    vaultWatcher?.close();
+    vaultWatcher = null;
+    try {
+      const sender = event.sender;
+      // recursive: suportado no Windows/macOS e no Linux a partir do Node 20
+      vaultWatcher = fs.watch(vaultPath, { recursive: true }, (_eventType, filename) => {
+        const name = filename ? String(filename) : '';
+        // Ignora .vellum (cache de embeddings, lixeira) — sem este filtro,
+        // gravar o cache dispararia o watcher e criaria loop de reindexação
+        if (name.includes('.vellum')) return;
+        // Ignora extensões que o app não lista (mantém pastas, que não têm extensão)
+        const ext = path.extname(name);
+        if (ext && !/\.(md|txt|png|jpe?g|gif|svg|webp)$/i.test(ext)) return;
+        // Debounce: rajadas de eventos (salvar, sync) viram uma notificação só
+        if (watchDebounce) clearTimeout(watchDebounce);
+        watchDebounce = setTimeout(() => {
+          if (!sender.isDestroyed()) sender.send('vault:changed');
+        }, 1500);
+      });
+      return true;
+    } catch (e) {
+      console.error('watchVault error:', e);
+      return false;
+    }
+  });
+
+  ipcMain.handle('fs:unwatchVault', () => {
+    vaultWatcher?.close();
+    vaultWatcher = null;
+    if (watchDebounce) { clearTimeout(watchDebounce); watchDebounce = null; }
+    return true;
+  });
+
   ipcMain.handle('shell:openExternal', async (_, url: string) => {
     // Whitelist only safe protocols — block file://, javascript:, ms-settings:, etc.
     let parsed: URL;

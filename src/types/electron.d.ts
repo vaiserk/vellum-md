@@ -12,6 +12,9 @@ declare global {
         renameFile: (oldPath: string, newPath: string) => Promise<boolean>;
         deleteFile: (filePath: string, vaultPath?: string) => Promise<boolean>;
         restoreLastDeleted: (vaultPath: string) => Promise<boolean>;
+        watchVault: (vaultPath: string) => Promise<boolean>;
+        unwatchVault: () => Promise<boolean>;
+        onVaultChanged: (callback: () => void) => () => void;
         readEmbeddingCache: (vaultPath: string) => Promise<EmbeddingCache>;
         writeEmbeddingCache: (vaultPath: string, data: EmbeddingCache) => Promise<boolean>;
       };

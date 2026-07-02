@@ -233,9 +233,36 @@ dentro devolve o código-fonte editável. O CSS dos widgets já existia em
 
 ---
 
+## Etapa 7 — Monitoramento em tempo real do vault (file watcher)
+
+**Contexto:** os objetivos específicos do TCC prometem "monitoramento em tempo
+real de alterações" no vault — era a última funcionalidade planejada sem
+nenhuma implementação. Mudanças externas (outro editor, sync de nuvem) só
+apareciam reabrindo o vault.
+
+**Implementação:**
+- `fs.watch(vaultPath, { recursive: true })` no processo principal
+  (`fs:watchVault` / `fs:unwatchVault`), com notificação ao renderer via
+  evento `vault:changed`.
+- **Filtro de `.vellum/`**: sem ele, gravar o cache de embeddings dispararia o
+  próprio watcher e criaria um loop de reindexação. Extensões fora da lista do
+  app também são ignoradas.
+- **Debounce de 1,5 s** no processo principal: rajadas de eventos (salvar,
+  sync de vários arquivos) viram uma única notificação.
+- No `App`, a notificação refaz o `readDir` e chama `setFiles` — que dispara a
+  reindexação **incremental**: pelo cache por `mtime`, só arquivos realmente
+  modificados custam chamadas de API. Efeito colateral aceito e desejado: a
+  nota em edição é re-embedada após cada rajada de salvamentos, mantendo o
+  índice semântico sempre atualizado (1 requisição batch por rajada; o rate
+  limiter protege a cota).
+- Watcher fechado e re-aberto ao trocar de vault (cleanup do efeito).
+
+**Arquivos:** `electron/handlers/fs.handler.ts`, `electron/preload.ts`,
+`src/types/electron.d.ts`, `src/App.tsx`.
+
+---
+
 ## Pendências (próximas etapas planejadas, ainda não implementadas)
 
-- **Etapa 7:** file watcher do vault (promessa do TCC de "monitoramento em
-  tempo real" — filtrar `.vellum/` para não criar loop com o cache).
 - **Etapa 8:** configuração do `electron-builder` (appId, targets, ícone) para
   gerar instaladores de verdade — fase 5 do plano do TCC.
