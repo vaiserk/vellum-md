@@ -1,6 +1,8 @@
 import { ViewPlugin, DecorationSet, EditorView, WidgetType, Decoration } from '@codemirror/view';
 import { RangeSetBuilder } from '@codemirror/state';
-import mermaid from 'mermaid';
+// Loader lazy compartilhado com o Preview — mesma instância e mesma fila de
+// renderização (o Mermaid é singleton; renders concorrentes se corrompem).
+import { enqueueMermaidRender } from '../../../utils/mermaid-loader';
 
 let mermaidCounter = 0;
 
@@ -19,19 +21,29 @@ class MermaidWidget extends WidgetType {
     const div = document.createElement('div');
     div.className = 'cm-mermaid-widget';
     div.setAttribute('data-mermaid-code', this.code);
+    div.textContent = 'Renderizando diagrama…';
+    div.style.fontStyle = 'italic';
+    div.style.fontSize = '11px';
+    div.style.color = 'var(--text-secondary)';
 
     // Async render into the div after it's attached to the DOM.
     // Guard with `destroyed` so we never write to a detached node
     // after CodeMirror has already recycled / destroyed this widget.
     requestAnimationFrame(() => {
       if (this.destroyed) return;
-      mermaid.render(this.id, this.code)
-        .then(({ svg }) => {
-          if (!this.destroyed) div.innerHTML = svg;
+      enqueueMermaidRender(this.id, this.code)
+        .then((svg) => {
+          if (!this.destroyed) {
+            div.style.fontStyle = '';
+            div.style.fontSize = '';
+            div.style.color = '';
+            div.innerHTML = svg;
+          }
         })
         .catch(() => {
           if (!this.destroyed) {
             div.textContent = '[Mermaid: erro de sintaxe]';
+            div.style.fontStyle = '';
             div.style.color = 'var(--error-color)';
             div.style.fontSize = '11px';
             div.style.padding = '4px';
@@ -76,26 +88,29 @@ export const mermaidInlinePreview = ViewPlugin.fromClass(
 function buildMermaidDecorations(view: EditorView): DecorationSet {
   try {
     const builder = new RangeSetBuilder<Decoration>();
-    const text = view.state.doc.toString();
     const selection = view.state.selection.main;
-
-    let m: RegExpExecArray | null;
-    const re = new RegExp(MERMAID_FENCE_RE.source, 'gm');
-    let lastTo = -1;
-
-    // Collect and sort by position to satisfy RangeSetBuilder ordering requirement
     const matches: Array<{ from: number; to: number; code: string }> = [];
-    while ((m = re.exec(text)) !== null) {
-      const from = m.index;
-      const to = from + m[0].length;
-      if (selection.from <= to && selection.to >= from) continue;
-      if (from >= view.viewport.to || to <= view.viewport.from) continue;
-      const code = m[1].trim();
-      if (code) matches.push({ from, to, code });
+
+    // Escaneia apenas os trechos visíveis do documento (visibleRanges) —
+    // a versão anterior fazia doc.toString() + regex no documento INTEIRO
+    // a cada tecla, o que causava lag em notas grandes.
+    for (const { from: rangeFrom, to: rangeTo } of view.visibleRanges) {
+      const text = view.state.doc.sliceString(rangeFrom, rangeTo);
+      const re = new RegExp(MERMAID_FENCE_RE.source, 'gm');
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text)) !== null) {
+        const from = rangeFrom + m.index;
+        const to = from + m[0].length;
+        // Bloco sob o cursor/seleção permanece como código editável
+        if (selection.from <= to && selection.to >= from) continue;
+        const code = m[1].trim();
+        if (code) matches.push({ from, to, code });
+      }
     }
 
+    // Sort + dedupe overlaps to satisfy RangeSetBuilder ordering requirement
     matches.sort((a, b) => a.from - b.from);
-
+    let lastTo = -1;
     for (const { from, to, code } of matches) {
       if (from >= lastTo) {
         builder.add(from, to, Decoration.replace({ widget: new MermaidWidget(code) }));

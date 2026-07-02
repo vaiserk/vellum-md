@@ -200,11 +200,41 @@ Matryoshka do modelo).
 
 ---
 
+## Etapa 6 — Preview inline de LaTeX e Mermaid no editor (feature planejada, religada)
+
+**Contexto:** as extensões `latexInlinePreview` e `mermaidInlinePreview`
+existiam desde o início do projeto — mas **nunca foram adicionadas ao array
+`extensions` do editor**. A promessa do TCC de renderizar fórmulas e diagramas
+"diretamente no editor" estava com o código pronto e desligado.
+
+**O que foi feito antes de religar:**
+
+1. **`mermaid.ext.ts` reescrito para `visibleRanges`**: a versão original fazia
+   `doc.toString()` + regex no documento inteiro a cada tecla — religá-la assim
+   traria lag em notas grandes. Agora escaneia apenas os trechos visíveis
+   (mesma técnica já aplicada ao `latex.ext.ts`).
+
+2. **Loader do Mermaid compartilhado** (`src/utils/mermaid-loader.ts`): o
+   Preview e a extensão do editor usam a **mesma instância lazy e a mesma fila
+   de renderização**. Sem isso, dois `initialize()` concorrentes e renders em
+   paralelo (editor + preview no modo split) corromperiam o singleton do
+   Mermaid com erros de sintaxe espúrios. O lazy-load da Etapa 3 é preservado.
+
+3. Widget do editor ganhou estado de carregamento ("Renderizando diagrama…").
+
+**Comportamento:** fórmulas `$...$`/`$$...$$` e blocos ` ```mermaid ` renderizam
+no lugar do código quando o cursor está fora deles; clicar/mover o cursor para
+dentro devolve o código-fonte editável. O CSS dos widgets já existia em
+`index.css`.
+
+**Arquivos:** `src/utils/mermaid-loader.ts` (novo),
+`src/components/editor/extensions/mermaid.ext.ts`,
+`src/components/preview/Preview.tsx`, `src/components/editor/Editor.tsx`.
+
+---
+
 ## Pendências (próximas etapas planejadas, ainda não implementadas)
 
-- **Etapa 6 (F2+P6):** religar `latexInlinePreview`/`mermaidInlinePreview` no
-  editor (código pronto, nunca adicionado ao array `extensions`), corrigindo
-  antes o scan de documento inteiro em `mermaid.ext.ts` (usar `visibleRanges`).
 - **Etapa 7:** file watcher do vault (promessa do TCC de "monitoramento em
   tempo real" — filtrar `.vellum/` para não criar loop com o cache).
 - **Etapa 8:** configuração do `electron-builder` (appId, targets, ícone) para

@@ -18,61 +18,9 @@ import { useVaultStore } from '../../store/vault.store';
 import { visit } from 'unist-util-visit';
 import { buildKnownNotes } from '../../utils/files';
 import { useDebouncedValue } from '../../utils/useDebouncedValue';
-
-// ── Mermaid lazy-load ────────────────────────────────────────────────────────
-// O core do Mermaid (~600 kB min) saía no chunk principal e atrasava a abertura
-// do app mesmo para quem nunca usa diagramas. Agora o módulo só é baixado na
-// primeira vez que um bloco ```mermaid precisa ser renderizado.
-//
-// Regras preservadas do design anterior:
-// - initialize() NUNCA é chamado durante um render em andamento (reseta o estado
-//   singleton e quebra renders concorrentes com "Syntax error" espúrio);
-// - o tema é sincronizado por MutationObserver, uma vez por mudança de tema.
-type MermaidModule = typeof import('mermaid').default;
-let _mermaidPromise: Promise<MermaidModule> | null = null;
-let _lastMermaidTheme: 'dark' | 'default' | null = null;
-
-function currentMermaidTheme(): 'dark' | 'default' {
-  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default';
-}
-
-function getMermaid(): Promise<MermaidModule> {
-  if (!_mermaidPromise) {
-    _mermaidPromise = import('mermaid').then(({ default: mermaid }) => {
-      _lastMermaidTheme = currentMermaidTheme();
-      mermaid.initialize({ startOnLoad: false, theme: _lastMermaidTheme, securityLevel: 'loose' });
-      if (typeof MutationObserver !== 'undefined') {
-        new MutationObserver(() => {
-          const theme = currentMermaidTheme();
-          if (theme === _lastMermaidTheme) return;
-          _lastMermaidTheme = theme;
-          mermaid.initialize({ startOnLoad: false, theme, securityLevel: 'loose' });
-        }).observe(document.documentElement, {
-          attributes: true, attributeFilter: ['data-theme'],
-        });
-      }
-      return mermaid;
-    });
-  }
-  return _mermaidPromise;
-}
-
-// Global render queue — serializes mermaid.render() calls because mermaid is a singleton
-// and concurrent renders interfere with each other.
-let mermaidQueue: Promise<unknown> = Promise.resolve();
-function enqueueMermaidRender(id: string, code: string) {
-  return new Promise<string>((resolve, reject) => {
-    mermaidQueue = mermaidQueue.then(async () => {
-      try {
-        const mermaid = await getMermaid();
-        const { svg } = await mermaid.render(id, code);
-        resolve(svg);
-      } catch (err) {
-        reject(err);
-      }
-    });
-  });
-}
+// Loader lazy compartilhado com a extensão inline do editor — mesma instância
+// e mesma fila de renderização (o Mermaid é singleton; ver utils/mermaid-loader.ts)
+import { enqueueMermaidRender } from '../../utils/mermaid-loader';
 
 function MermaidBlock({ code }: { code: string }) {
   const [svg, setSvg] = useState<string>('');
