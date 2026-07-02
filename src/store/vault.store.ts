@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { EmbeddingService, extractTags, splitIntoPassages, cleanMarkdown } from '../services/embedding.service';
+import { EmbeddingService, extractTags, splitIntoPassages, cleanMarkdown, EMBEDDING_DIMENSIONS } from '../services/embedding.service';
 import { useSettingsStore } from './settings.store';
 import { flattenFiles } from '../utils/files';
 
@@ -222,8 +222,13 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       // misturá-los na mesma busca produz similaridades sem sentido (relevância baixa/aleatória).
       // Se o provedor/modelo configurado mudou desde a última indexação, descarta o cache
       // inteiro e reembeda tudo do zero com o modelo atual.
+      // A dimensionalidade também define o espaço vetorial: caches antigos
+      // (3072 dims, sem o campo `dimensions`) são descartados integralmente —
+      // misturar vetores de tamanhos diferentes quebraria a similaridade.
       const cacheMatchesCurrentModel =
-        cache.provider === settings.embeddingProvider && cache.model === settings.embeddingModel;
+        cache.provider === settings.embeddingProvider &&
+        cache.model === settings.embeddingModel &&
+        cache.dimensions === EMBEDDING_DIMENSIONS;
       const entries: Record<string, EmbeddingCacheEntry> = cacheMatchesCurrentModel ? (cache.entries ?? {}) : {};
 
       const mdFiles = flattenFiles(files).filter(f => f.name.endsWith('.md'));
@@ -302,6 +307,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
                 version: 1,
                 provider: settings.embeddingProvider,
                 model: settings.embeddingModel,
+                dimensions: EMBEDDING_DIMENSIONS,
                 entries,
               });
             }
@@ -335,6 +341,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
         version: 1,
         provider: settings.embeddingProvider,
         model: settings.embeddingModel,
+        dimensions: EMBEDDING_DIMENSIONS,
         entries,
       };
       await window.electron.fs.writeEmbeddingCache(vaultPath, updatedCache);

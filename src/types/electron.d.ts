@@ -36,6 +36,8 @@ declare global {
     version?: number;
     provider?: string;
     model?: string;
+    /** Dimensionalidade dos vetores — caches com dimensão diferente são descartados */
+    dimensions?: number;
     entries?: Record<string, EmbeddingCacheEntry>;
   }
 }

@@ -28,6 +28,17 @@ export const embeddingProviders: Record<EmbeddingProviderKey, EmbeddingProviderI
 
 const MAX_TEXT_CHARS = 6000;
 
+/**
+ * Dimensionalidade dos vetores de embedding.
+ * gemini-embedding-001 gera 3072 dims por padrão — 768 (truncamento MRL,
+ * suportado nativamente pela API) mantém a qualidade de recuperação com
+ * cache 4× menor, menos memória e similaridade de cosseno 4× mais rápida.
+ * text-embedding-3-* da OpenAI também aceita o parâmetro `dimensions`.
+ * ATENÇÃO: mudar este valor muda o espaço vetorial — o cache é invalidado
+ * automaticamente (vault.store compara `dimensions` do cache com este valor).
+ */
+export const EMBEDDING_DIMENSIONS = 768;
+
 export function cleanMarkdown(content: string): string {
   let text = content;
   // Remove frontmatter
@@ -165,7 +176,11 @@ async function embedWithGoogle(
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: { parts: [{ text }] }, taskType }),
+      body: JSON.stringify({
+        content: { parts: [{ text }] },
+        taskType,
+        outputDimensionality: EMBEDDING_DIMENSIONS,
+      }),
     }
   );
 
@@ -193,7 +208,7 @@ async function embedWithOpenAI(text: string, model: string, apiKey: string): Pro
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({ model, input: text }),
+    body: JSON.stringify({ model, input: text, dimensions: EMBEDDING_DIMENSIONS }),
   });
   if (!res.ok) {
     const err = await res.text();
@@ -228,6 +243,7 @@ async function embedBatchWithGoogle(
           model: `models/${model}`,
           content: { parts: [{ text }] },
           taskType,
+          outputDimensionality: EMBEDDING_DIMENSIONS,
         })),
       }),
     }
@@ -257,7 +273,7 @@ async function embedBatchWithOpenAI(texts: string[], model: string, apiKey: stri
       Authorization: `Bearer ${apiKey}`,
     },
     // A API da OpenAI aceita array de textos nativamente
-    body: JSON.stringify({ model, input: texts }),
+    body: JSON.stringify({ model, input: texts, dimensions: EMBEDDING_DIMENSIONS }),
   });
   if (!res.ok) {
     const err = await res.text();

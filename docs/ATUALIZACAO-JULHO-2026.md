@@ -173,10 +173,35 @@ nota com `<` ou `&` no nome quebrava a página.
 
 ---
 
+## Etapa 5 — Embeddings com 768 dimensões (cache e busca 4× mais leves)
+
+**Problema:** `gemini-embedding-001` retorna vetores de **3072 dimensões** por
+padrão. Cada nota indexada (documento + ~10 passagens) custava ~34 mil números
+no `embeddings.json` — em vaults médios o cache chegava a dezenas de MB, com
+parse lento na abertura e similaridade de cosseno proporcionalmente cara.
+
+**Correção:** todas as requisições de embedding agora pedem
+`outputDimensionality: 768` (truncamento MRL, suportado nativamente pela API
+Google; a OpenAI aceita o equivalente `dimensions`). A constante única
+`EMBEDDING_DIMENSIONS` em `embedding.service.ts` governa o valor.
+
+**Invalidação de cache:** vetores de 768 e 3072 dims habitam espaços vetoriais
+diferentes — misturá-los quebraria a busca silenciosamente. O cache agora
+registra `dimensions`, e o `vault.store` descarta caches com dimensão diferente
+da atual (caches antigos, sem o campo, são reindexados integralmente na
+primeira abertura — comportamento esperado e único custo da migração).
+
+**Resultado:** cache em disco, memória e tempo de similaridade ~4× menores,
+com perda de qualidade de recuperação negligível (propriedade do treinamento
+Matryoshka do modelo).
+
+**Arquivos:** `src/services/embedding.service.ts`, `src/store/vault.store.ts`,
+`src/types/electron.d.ts`.
+
+---
+
 ## Pendências (próximas etapas planejadas, ainda não implementadas)
 
-- **Etapa 5 (P3):** embeddings com `outputDimensionality: 768` — cache 4× menor
-  e busca 4× mais rápida. Exige invalidação do cache por dimensão.
 - **Etapa 6 (F2+P6):** religar `latexInlinePreview`/`mermaidInlinePreview` no
   editor (código pronto, nunca adicionado ao array `extensions`), corrigindo
   antes o scan de documento inteiro em `mermaid.ext.ts` (usar `visibleRanges`).
