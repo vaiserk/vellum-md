@@ -1,11 +1,46 @@
 {
   "name": "vellum-md",
   "version": "1.0.0",
+  "description": "Editor de Markdown local-first com busca semântica e assistência por IA",
+  "author": "Otavio Freitas dos Santos",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
     "preview": "vite preview"
+  },
+  "build": {
+    "appId": "com.vaiserk.vellummd",
+    "productName": "VellumMD",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "VellumMD"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "category": "Office"
+    }
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.2",

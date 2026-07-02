@@ -262,7 +262,41 @@ apareciam reabrindo o vault.
 
 ---
 
-## Pendências (próximas etapas planejadas, ainda não implementadas)
+## Etapa 8 — Distribuição multiplataforma (electron-builder)
 
-- **Etapa 8:** configuração do `electron-builder` (appId, targets, ícone) para
-  gerar instaladores de verdade — fase 5 do plano do TCC.
+**Contexto:** o script `npm run build` já invocava o `electron-builder`, mas
+**sem nenhuma configuração** — sem appId, sem nome de produto, sem alvos de
+empacotamento definidos. A fase 5 do plano do TCC ("polimento e distribuição
+multiplataforma") estava incompleta: nunca havia sido gerado um instalador real.
+
+**Configuração adicionada ao `package.json`:**
+- `appId: com.vaiserk.vellummd`, `productName: VellumMD`
+- **Windows**: instalador NSIS x64 com escolha de diretório e atalho na área
+  de trabalho; **macOS**: DMG (categoria Produtividade); **Linux**: AppImage.
+- Saída em `release/` (já no `.gitignore`).
+- `files` restrito a `dist/` + `dist-electron/` — o electron-builder inclui
+  automaticamente o `package.json` e as **dependências de produção** no asar,
+  o que é essencial: os assets offline da Etapa 4 (katex/mermaid/reveal/highlight)
+  são lidos de `node_modules` via `require.resolve` em tempo de execução.
+- Metadados `description`/`author` (exigidos pelos empacotadores Linux).
+
+**Como gerar o instalador:** `npm run build` (na primeira execução o
+electron-builder baixa os binários do Electron — pode demorar alguns minutos).
+O instalador sai em `release/VellumMD Setup 1.0.0.exe` (Windows).
+
+**Pendência cosmética:** o app usa o ícone padrão do Electron. Para o ícone
+próprio, adicionar `build/icon.ico` (Windows, 256×256) e `build/icon.png`
+(Linux, 512×512) e apontar `win.icon`/`linux.icon` na configuração.
+
+**Arquivos:** `package.json`.
+
+---
+
+## Estado final da atualização
+
+Todas as 8 etapas planejadas foram implementadas, cada uma verificada com
+`tsc --noEmit` + `vite build` e commitada isoladamente. Próximo passo do
+projeto: **bateria de testes manuais** (digitação com preview, busca semântica
+com reindexação do zero — o cache antigo será invalidado pela mudança de
+dimensionalidade —, exportações offline, preview inline no editor, alterações
+externas ao vault e geração do instalador).
