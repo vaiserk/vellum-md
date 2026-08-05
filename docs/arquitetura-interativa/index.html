@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VellumMD — Arquitetura Interativa</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          ui: '#818cf8', state: '#c084fc', service: '#38bdf8', util: '#2dd4bf',
+          ipc: '#fbbf24', main: '#34d399', persist: '#94a3b8', external: '#fb7185',
+        },
+        fontFamily: { sans: ['Inter', 'Segoe UI', 'system-ui', 'sans-serif'] },
+      }
+    }
+  }
+</script>
+<style>
+  html, body { background: #070a11; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 6px; }
+  ::-webkit-scrollbar-thumb:hover { background: #334155; }
+
+  #edges path { fill: none; transition: stroke-opacity .25s, stroke-width .25s, stroke .25s; }
+  #edges path.dim { stroke-opacity: .04 !important; }
+  #edges path.flow {
+    stroke-opacity: .95 !important; stroke-width: 2.4 !important;
+    stroke-dasharray: 7 6; animation: dash 1s linear infinite;
+  }
+  #edges path.flow-step {
+    stroke-opacity: 1 !important; stroke-width: 3.4 !important;
+    filter: drop-shadow(0 0 5px currentColor);
+  }
+  #edges path.hover-edge { stroke-opacity: .7 !important; stroke-width: 2.2 !important; }
+  @keyframes dash { to { stroke-dashoffset: -26; } }
+
+  .node {
+    transition: transform .18s ease, box-shadow .25s, opacity .25s, border-color .2s;
+    will-change: transform;
+  }
+  .node:hover { transform: translateY(-2px); }
+  .node.dim { opacity: .28; }
+  .node.flow { box-shadow: 0 0 0 1.5px var(--gc), 0 0 22px -6px var(--gc); border-color: var(--gc) !important; }
+  .node.step-active {
+    box-shadow: 0 0 0 2px var(--gc), 0 0 30px -4px var(--gc);
+    transform: translateY(-2px) scale(1.03);
+  }
+  .node.picked { box-shadow: 0 0 0 2px #fff3, 0 0 0 1px var(--gc); }
+
+  .flowbtn.active { background: var(--fc, #6366f1); color: #fff; border-color: var(--fc, #6366f1); }
+  .stepcard { transition: background .2s, border-color .2s; }
+  .stepcard.active { background: rgba(99,102,241,.14); border-color: #6366f1; }
+  .fade-in { animation: fade .3s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px);} to {opacity:1; transform:none;} }
+</style>
+</head>
+<body class="text-slate-200 font-sans antialiased">
+
+<div class="max-w-[1500px] mx-auto px-4 sm:px-6 py-6">
+
+  <!-- Header -->
+  <header class="flex flex-wrap items-end justify-between gap-4 mb-5">
+    <div>
+      <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">
+        <span class="text-indigo-400">Vellum</span><span class="text-slate-100">MD</span>
+        <span class="text-slate-500 font-normal">· Arquitetura Interativa</span>
+      </h1>
+      <p class="text-slate-400 text-sm mt-1 max-w-2xl">
+        Editor de Markdown local-first (Electron + React + TypeScript) com busca semântica por
+        embeddings e assistência por LLMs. Selecione um <b class="text-slate-300">fluxo</b> para
+        realçar o caminho, ou clique num <b class="text-slate-300">nó</b> para inspecioná-lo.
+      </p>
+    </div>
+    <div class="flex gap-2 text-xs">
+      <div class="px-3 py-2 rounded-lg bg-slate-900/70 border border-slate-800 text-center">
+        <div id="stat-nodes" class="text-lg font-bold text-indigo-300">–</div><div class="text-slate-500">nós</div>
+      </div>
+      <div class="px-3 py-2 rounded-lg bg-slate-900/70 border border-slate-800 text-center">
+        <div id="stat-edges" class="text-lg font-bold text-sky-300">–</div><div class="text-slate-500">conexões</div>
+      </div>
+      <div class="px-3 py-2 rounded-lg bg-slate-900/70 border border-slate-800 text-center">
+        <div id="stat-flows" class="text-lg font-bold text-emerald-300">–</div><div class="text-slate-500">fluxos</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Flow selector -->
+  <div class="mb-4">
+    <div class="flex items-center gap-2 mb-2">
+      <span class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Fluxos</span>
+      <div class="h-px flex-1 bg-slate-800"></div>
+    </div>
+    <div id="flow-bar" class="flex flex-wrap gap-2"></div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">
+
+    <!-- Diagram -->
+    <div class="rounded-xl border border-slate-800 bg-slate-950/60 overflow-hidden">
+      <div class="flex items-center justify-between px-4 py-2.5 border-b border-slate-800 bg-slate-900/40">
+        <div id="legend" class="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-400"></div>
+        <button id="reset-btn" class="text-xs px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 transition shrink-0">
+          Ver arquitetura completa
+        </button>
+      </div>
+      <div id="diagram" class="relative p-4 sm:p-6 overflow-auto">
+        <svg id="edges" class="absolute inset-0 pointer-events-none" style="z-index:0;">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="context-stroke"></path>
+            </marker>
+          </defs>
+        </svg>
+        <div id="layers" class="relative" style="z-index:1;"></div>
+      </div>
+    </div>
+
+    <!-- Side panel -->
+    <aside class="space-y-4">
+      <!-- Flow / steps -->
+      <div class="rounded-xl border border-slate-800 bg-slate-900/50">
+        <div class="px-4 py-3 border-b border-slate-800">
+          <h2 id="flow-title" class="font-semibold text-slate-100 text-sm">Passo a passo</h2>
+          <p id="flow-desc" class="text-xs text-slate-400 mt-0.5">Escolha um fluxo acima para ver os passos.</p>
+        </div>
+        <ol id="steps" class="p-3 space-y-2 max-h-[42vh] overflow-auto"></ol>
+      </div>
+
+      <!-- Node inspector -->
+      <div class="rounded-xl border border-slate-800 bg-slate-900/50">
+        <div class="px-4 py-3 border-b border-slate-800">
+          <h2 class="font-semibold text-slate-100 text-sm">Inspetor de nó</h2>
+        </div>
+        <div id="inspector" class="p-4 text-sm text-slate-400">
+          Clique num nó do diagrama para ver o arquivo e a responsabilidade.
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="mt-6 text-center text-xs text-slate-600">
+    Gerado a partir da análise do codebase · dados completos em <code class="text-slate-500">architecture.json</code>
+  </footer>
+</div>
+
+<script>
+// ─── DADOS (espelho de architecture.json) ────────────────────────────────────
+const DATA = {
+  "meta": {
+    "project": "VellumMD",
+    "description": "Editor de Markdown local-first (Electron + React + TypeScript) com busca semantica por embeddings e assistencia por LLMs.",
+    "generatedFor": "Agentes de IA e navegacao de arquitetura",
+    "stack": ["Electron 30", "React 18", "TypeScript 5", "Vite 5", "Zustand 4", "CodeMirror 6", "unified/remark/rehype", "KaTeX", "Mermaid 11"],
+    "groups": {
+      "ui": "Componentes React do processo de renderizacao",
+      "state": "Stores Zustand (estado global)",
+      "service": "Servicos de dominio (IA, embeddings, similaridade)",
+      "util": "Utilitarios compartilhados",
+      "ipc": "Ponte segura entre renderer e main (contextBridge)",
+      "main": "Processo principal do Electron (Node.js)",
+      "persist": "Persistencia local (sistema de arquivos)",
+      "external": "APIs externas de IA (unica saida de rede)"
+    }
+  },
+  "nodes": [
+    { "id": "app", "label": "App", "file": "src/App.tsx", "group": "ui", "layer": 0, "desc": "Raiz do renderer: layout, atalhos globais, efeitos de indexacao e file watcher, roteamento de eventos vellum:open-note e vault:changed." },
+    { "id": "sidebar", "label": "Sidebar", "file": "src/components/sidebar/Sidebar.tsx", "group": "ui", "layer": 0, "desc": "Abas Arquivos/Busca/Tags/Backlinks. Busca lexica + semantica unificada com debounce e guard de geracao." },
+    { "id": "filetree", "label": "FileTree", "file": "src/components/sidebar/FileTree.tsx", "group": "ui", "layer": 0, "desc": "Arvore de arquivos do vault; menu de contexto (renomear, excluir)." },
+    { "id": "backlinks", "label": "BacklinksPane", "file": "src/components/sidebar/BacklinksPane.tsx", "group": "ui", "layer": 0, "desc": "Lista notas que referenciam a nota ativa via [[wikilink]] (suporta alias e ancora)." },
+    { "id": "editor", "label": "Editor", "file": "src/components/editor/Editor.tsx", "group": "ui", "layer": 0, "desc": "Nucleo CodeMirror 6: auto-save com debounce e flush ao trocar de nota, keymap proprio, sync externo." },
+    { "id": "editor-ext", "label": "Editor Extensions", "file": "src/components/editor/extensions/*", "group": "ui", "layer": 0, "desc": "ViewPlugins: wikilink, latex inline, mermaid inline, slash-commands, ai-context-menu, typewriter." },
+    { "id": "preview", "label": "Preview", "file": "src/components/preview/Preview.tsx", "group": "ui", "layer": 0, "desc": "Pipeline unified markdown->React com debounce de 200ms; plugins de wikilink, callout, math, checkbox; mermaid lazy." },
+    { "id": "ai-panel", "label": "AIPanel", "file": "src/components/ai/AIPanel.tsx", "group": "ui", "layer": 0, "desc": "Chat contextual: injeta a nota ativa no system prompt e renderiza streaming; acoes rapidas." },
+    { "id": "link-suggestion", "label": "LinkSuggestion", "file": "src/components/ai/LinkSuggestion.tsx", "group": "ui", "layer": 0, "desc": "Sugere wikilinks para notas semanticamente relacionadas ao trecho em edicao." },
+    { "id": "statusbar", "label": "StatusBar", "file": "src/components/statusbar/StatusBar.tsx", "group": "ui", "layer": 0, "desc": "Contadores (palavras/caracteres), posicao do cursor, status de salvamento, banner de desfazer exclusao." },
+    { "id": "command-palette", "label": "CommandPalette", "file": "src/components/modals/CommandPalette.tsx", "group": "ui", "layer": 0, "desc": "Paleta de comandos (Ctrl+P): acoes de arquivo, editor e configuracoes." },
+    { "id": "settings-modal", "label": "SettingsModal", "file": "src/components/modals/SettingsModal.tsx", "group": "ui", "layer": 0, "desc": "Configura provedores/modelos de IA e embedding, chaves, e reindexacao manual." },
+    { "id": "export-modal", "label": "ExportModal", "file": "src/components/modals/ExportModal.tsx", "group": "ui", "layer": 0, "desc": "Exporta PDF/slides/site; pipeline unified proprio + plugins de callout e wikilink->ancora." },
+    { "id": "new-note-modal", "label": "NewNoteModal", "file": "src/components/modals/NewNoteModal.tsx", "group": "ui", "layer": 0, "desc": "Cria nota (com geracao opcional por IA)." },
+    { "id": "onboarding", "label": "OnboardingWizard", "file": "src/components/modals/OnboardingWizard.tsx", "group": "ui", "layer": 0, "desc": "Assistente de primeira execucao (configura vault e chaves)." },
+
+    { "id": "vault-store", "label": "vault.store", "file": "src/store/vault.store.ts", "group": "state", "layer": 1, "desc": "Estado do vault: arquivos, nota ativa, indices (embedding/passagem/tag), fileContents; buildEmbeddingIndex e loadTagsOnly." },
+    { "id": "settings-store", "label": "settings.store", "file": "src/store/settings.store.ts", "group": "state", "layer": 1, "desc": "Config persistida (localStorage) com versionamento/migracao: provedores, modelos, chaves, preferencias." },
+
+    { "id": "ai-service", "label": "ai.service", "file": "src/services/ai.service.ts", "group": "service", "layer": 2, "desc": "Cliente de chat multiprotocolo (OpenAI-compat, Anthropic nativo, Gemma/Google nativo) com streaming SSE." },
+    { "id": "embedding-service", "label": "embedding.service", "file": "src/services/embedding.service.ts", "group": "service", "layer": 2, "desc": "embed/embedBatch (batchEmbedContents, 768 dims), limpeza de markdown, segmentacao em passagens, extracao de tags." },
+    { "id": "similarity", "label": "similarity", "file": "src/services/similarity.ts", "group": "service", "layer": 2, "desc": "cosineSimilarity e topKSimilar (ranqueia o indice em memoria)." },
+    { "id": "rate-limiter", "label": "model-limits", "file": "src/config/model-limits.ts", "group": "service", "layer": 2, "desc": "Rate limiter por janela deslizante (RPM por modelo) com espera automatica; compartilhado por chat e embeddings." },
+    { "id": "utils-files", "label": "utils/files", "file": "src/utils/files.ts", "group": "util", "layer": 2, "desc": "flattenFiles e buildKnownNotes (fonte unica; antes duplicados em 4 arquivos)." },
+    { "id": "mermaid-loader", "label": "mermaid-loader", "file": "src/utils/mermaid-loader.ts", "group": "util", "layer": 2, "desc": "Lazy import do Mermaid + fila global de renderizacao, compartilhada por Preview e editor (singleton)." },
+    { "id": "debounce", "label": "useDebouncedValue", "file": "src/utils/useDebouncedValue.ts", "group": "util", "layer": 2, "desc": "Hook de debounce com flushKey (aplica imediatamente ao trocar de chave)." },
+
+    { "id": "preload", "label": "preload", "file": "electron/preload.ts", "group": "ipc", "layer": 3, "desc": "contextBridge: expoe window.electron.{fs,export,shell} ao renderer sem acesso direto ao Node." },
+
+    { "id": "main", "label": "main", "file": "electron/main.ts", "group": "main", "layer": 4, "desc": "Cria a BrowserWindow (contextIsolation, sem nodeIntegration) e registra os handlers IPC." },
+    { "id": "fs-handler", "label": "fs.handler", "file": "electron/handlers/fs.handler.ts", "group": "main", "layer": 4, "desc": "IPC de arquivos: vault, leitura/escrita, lixeira, cache de embeddings, file watcher, openExternal com whitelist." },
+    { "id": "export-handler", "label": "export.handler", "file": "electron/handlers/export.handler.ts", "group": "main", "layer": 4, "desc": "Exportacao PDF (BrowserWindow offscreen, assets inline offline, espera deterministica), slides (Reveal.js) e site estatico." },
+
+    { "id": "fsys", "label": "Sistema de Arquivos", "file": "vault/*.md", "group": "persist", "layer": 5, "desc": "Vault do usuario: arquivos .md puros, portateis, sem banco de dados." },
+    { "id": "cache", "label": "Cache de Embeddings", "file": "vault/.vellum/embeddings.json", "group": "persist", "layer": 5, "desc": "Vetores por arquivo (mtime + embedding + passagens), com provider/model/dimensions para invalidacao." },
+    { "id": "trash", "label": "Lixeira", "file": "vault/.vellum/trash/", "group": "persist", "layer": 5, "desc": "Notas excluidas (caminho relativo codificado no nome) para restauracao no local original." },
+
+    { "id": "ext-google", "label": "Google AI (Gemini/Gemma)", "file": "generativelanguage.googleapis.com", "group": "external", "layer": 5, "desc": "Embeddings (batchEmbedContents) e chat (streamGenerateContent). Unica saida de rede junto das demais APIs." },
+    { "id": "ext-openai", "label": "OpenAI API", "file": "api.openai.com", "group": "external", "layer": 5, "desc": "Chat e embeddings (alternativos, configuraveis)." },
+    { "id": "ext-anthropic", "label": "Anthropic API", "file": "api.anthropic.com", "group": "external", "layer": 5, "desc": "Chat (Claude) via API nativa." },
+    { "id": "ext-groq", "label": "Groq API", "file": "api.groq.com", "group": "external", "layer": 5, "desc": "Chat (OpenAI-compativel)." }
+  ],
+  "edges": [
+    { "source": "app", "target": "vault-store", "kind": "subscribe", "label": "assina/estado" },
+    { "source": "app", "target": "settings-store", "kind": "subscribe", "label": "assina" },
+    { "source": "sidebar", "target": "vault-store", "kind": "subscribe", "label": "assina" },
+    { "source": "sidebar", "target": "settings-store", "kind": "subscribe", "label": "assina" },
+    { "source": "editor", "target": "vault-store", "kind": "subscribe", "label": "assina/atualiza" },
+    { "source": "editor", "target": "settings-store", "kind": "subscribe", "label": "assina" },
+    { "source": "preview", "target": "vault-store", "kind": "subscribe", "label": "assina" },
+    { "source": "ai-panel", "target": "vault-store", "kind": "subscribe", "label": "getState (nota ativa)" },
+    { "source": "statusbar", "target": "vault-store", "kind": "subscribe", "label": "assina" },
+    { "source": "filetree", "target": "vault-store", "kind": "subscribe", "label": "assina" },
+    { "source": "backlinks", "target": "vault-store", "kind": "subscribe", "label": "varre fileContents" },
+    { "source": "link-suggestion", "target": "vault-store", "kind": "subscribe", "label": "assina indice" },
+    { "source": "link-suggestion", "target": "settings-store", "kind": "subscribe", "label": "assina" },
+    { "source": "settings-modal", "target": "settings-store", "kind": "subscribe", "label": "le/grava config" },
+    { "source": "export-modal", "target": "vault-store", "kind": "subscribe", "label": "assina" },
+    { "source": "new-note-modal", "target": "vault-store", "kind": "subscribe", "label": "assina" },
+    { "source": "command-palette", "target": "vault-store", "kind": "subscribe", "label": "acoes" },
+
+    { "source": "editor", "target": "editor-ext", "kind": "contains", "label": "compoe extensoes" },
+
+    { "source": "vault-store", "target": "embedding-service", "kind": "call", "label": "embedBatch" },
+    { "source": "vault-store", "target": "utils-files", "kind": "call", "label": "flattenFiles" },
+    { "source": "sidebar", "target": "embedding-service", "kind": "call", "label": "embed(query)" },
+    { "source": "sidebar", "target": "similarity", "kind": "call", "label": "topKSimilar" },
+    { "source": "sidebar", "target": "utils-files", "kind": "call", "label": "flattenFiles" },
+    { "source": "link-suggestion", "target": "embedding-service", "kind": "call", "label": "embed" },
+    { "source": "link-suggestion", "target": "similarity", "kind": "call", "label": "topKSimilar" },
+    { "source": "ai-panel", "target": "ai-service", "kind": "call", "label": "chat(streaming)" },
+    { "source": "ai-panel", "target": "editor", "kind": "call", "label": "inserir no editor" },
+    { "source": "new-note-modal", "target": "ai-service", "kind": "call", "label": "gerar nota" },
+    { "source": "embedding-service", "target": "rate-limiter", "kind": "call", "label": "throttle (RPM)" },
+    { "source": "ai-service", "target": "rate-limiter", "kind": "call", "label": "throttle" },
+    { "source": "ai-service", "target": "settings-store", "kind": "call", "label": "getState (chave)" },
+    { "source": "preview", "target": "mermaid-loader", "kind": "call", "label": "enqueueMermaidRender" },
+    { "source": "editor-ext", "target": "mermaid-loader", "kind": "call", "label": "enqueueMermaidRender" },
+    { "source": "preview", "target": "debounce", "kind": "call", "label": "useDebouncedValue" },
+    { "source": "preview", "target": "utils-files", "kind": "call", "label": "buildKnownNotes" },
+
+    { "source": "ai-service", "target": "ext-google", "kind": "api", "label": "streamGenerateContent" },
+    { "source": "ai-service", "target": "ext-openai", "kind": "api", "label": "chat/completions" },
+    { "source": "ai-service", "target": "ext-anthropic", "kind": "api", "label": "v1/messages" },
+    { "source": "ai-service", "target": "ext-groq", "kind": "api", "label": "chat/completions" },
+    { "source": "embedding-service", "target": "ext-google", "kind": "api", "label": "batchEmbedContents" },
+    { "source": "embedding-service", "target": "ext-openai", "kind": "api", "label": "v1/embeddings" },
+
+    { "source": "app", "target": "preload", "kind": "ipc", "label": "window.electron.fs" },
+    { "source": "sidebar", "target": "preload", "kind": "ipc", "label": "openVault/readDir/readFile" },
+    { "source": "editor", "target": "preload", "kind": "ipc", "label": "writeFile" },
+    { "source": "vault-store", "target": "preload", "kind": "ipc", "label": "read/writeEmbeddingCache" },
+    { "source": "export-modal", "target": "preload", "kind": "ipc", "label": "export:*" },
+    { "source": "filetree", "target": "preload", "kind": "ipc", "label": "deleteFile/renameFile" },
+    { "source": "statusbar", "target": "preload", "kind": "ipc", "label": "restoreLastDeleted" },
+    { "source": "preload", "target": "fs-handler", "kind": "ipc", "label": "ipcRenderer.invoke(fs:*)" },
+    { "source": "preload", "target": "export-handler", "kind": "ipc", "label": "ipcRenderer.invoke(export:*)" },
+
+    { "source": "fs-handler", "target": "fsys", "kind": "data", "label": "read/write/watch" },
+    { "source": "fs-handler", "target": "cache", "kind": "data", "label": "le/grava cache" },
+    { "source": "fs-handler", "target": "trash", "kind": "data", "label": "move/restaura" },
+    { "source": "export-handler", "target": "fsys", "kind": "data", "label": "grava PDF/site" },
+
+    { "source": "main", "target": "preload", "kind": "loads", "label": "carrega preload" },
+    { "source": "main", "target": "fs-handler", "kind": "loads", "label": "registra handlers" },
+    { "source": "main", "target": "export-handler", "kind": "loads", "label": "registra handlers" },
+
+    { "source": "editor-ext", "target": "app", "kind": "event", "label": "vellum:open-note" },
+    { "source": "preview", "target": "app", "kind": "event", "label": "vellum:open-note" },
+    { "source": "fs-handler", "target": "app", "kind": "event", "label": "vault:changed" }
+  ],
+  "flows": [
+    {
+      "id": "abrir-indexar",
+      "name": "Abrir Vault e Indexar",
+      "desc": "Selecao do vault, leitura da arvore e construcao incremental do indice semantico (cache por mtime, embeddings em lote).",
+      "steps": [
+        { "title": "Abrir vault", "detail": "Sidebar chama window.electron.fs.openVault() e depois readDir().", "node": "sidebar", "edge": ["sidebar", "preload"] },
+        { "title": "IPC de arquivos", "detail": "preload encaminha fs:openVault / fs:readDir ao processo principal.", "node": "preload", "edge": ["preload", "fs-handler"] },
+        { "title": "Ler arvore", "detail": "fs.handler percorre o diretorio recursivamente (ignora dotfiles) e devolve FileNode[] com mtime.", "node": "fs-handler", "edge": ["fs-handler", "fsys"] },
+        { "title": "setFiles dispara efeito", "detail": "App observa files e chama buildEmbeddingIndex() (fallback loadTagsOnly sem chave).", "node": "vault-store", "edge": ["app", "vault-store"] },
+        { "title": "Ler cache", "detail": "Le .vellum/embeddings.json; valida provider/model/dimensions e reaproveita vetores por mtime.", "node": "cache", "edge": ["fs-handler", "cache"] },
+        { "title": "Embutir em lote", "detail": "Arquivos novos/modificados: embedBatch([documento, ...passagens]) em 1 requisicao.", "node": "embedding-service", "edge": ["vault-store", "embedding-service"] },
+        { "title": "Rate limit", "detail": "throttle respeita o RPM do modelo antes de cada chamada.", "node": "rate-limiter", "edge": ["embedding-service", "rate-limiter"] },
+        { "title": "API de embeddings", "detail": "batchEmbedContents com outputDimensionality 768 (RETRIEVAL_DOCUMENT).", "node": "ext-google", "edge": ["embedding-service", "ext-google"] },
+        { "title": "Gravar cache", "detail": "Cache atualizado incrementalmente (a cada 10 arquivos) e indices em memoria prontos.", "node": "cache", "edge": ["fs-handler", "cache"] }
+      ]
+    },
+    {
+      "id": "editar-salvar",
+      "name": "Editar e Salvar (auto-save)",
+      "desc": "Digitacao no editor com salvamento automatico por debounce e flush ao trocar de nota.",
+      "steps": [
+        { "title": "Digitar", "detail": "Usuario edita no CodeMirror; updateListener captura docChanged.", "node": "editor", "edge": null },
+        { "title": "Atualizar estado", "detail": "setActiveContent(conteudo) e setSaveStatus('saving').", "node": "vault-store", "edge": ["editor", "vault-store"] },
+        { "title": "Gravar (debounce)", "detail": "Apos o intervalo configuravel, fs:writeFile persiste; troca de nota faz flush imediato.", "node": "preload", "edge": ["editor", "preload"] },
+        { "title": "Escrever arquivo", "detail": "fs.handler grava o .md no disco.", "node": "fs-handler", "edge": ["fs-handler", "fsys"] },
+        { "title": "Status salvo", "detail": "setSaveStatus('saved') reflete na StatusBar.", "node": "statusbar", "edge": ["statusbar", "vault-store"] }
+      ]
+    },
+    {
+      "id": "busca-semantica",
+      "name": "Busca Semantica",
+      "desc": "Consulta vetorizada e comparada por similaridade de cosseno contra o indice, combinada com busca lexica.",
+      "steps": [
+        { "title": "Digitar consulta", "detail": "Aba Busca da Sidebar; debounce de 400ms e guard de geracao.", "node": "sidebar", "edge": null },
+        { "title": "Vetorizar consulta", "detail": "embed(query, RETRIEVAL_QUERY) — assimetrico em relacao aos documentos.", "node": "embedding-service", "edge": ["sidebar", "embedding-service"] },
+        { "title": "API de embeddings", "detail": "embedContent (768 dims) para a consulta.", "node": "ext-google", "edge": ["embedding-service", "ext-google"] },
+        { "title": "Ranquear", "detail": "topKSimilar(query, embeddingIndex) filtrado por limiar.", "node": "similarity", "edge": ["sidebar", "similarity"] },
+        { "title": "Melhor passagem", "detail": "Le passageIndex para exibir o trecho mais relevante de cada nota.", "node": "vault-store", "edge": ["sidebar", "vault-store"] }
+      ]
+    },
+    {
+      "id": "assistente-ia",
+      "name": "Assistente de IA (chat)",
+      "desc": "Chat contextual com a nota ativa, resposta em streaming (SSE) e insercao no editor.",
+      "steps": [
+        { "title": "Enviar mensagem", "detail": "Usuario envia texto ou aciona uma acao rapida.", "node": "ai-panel", "edge": null },
+        { "title": "Montar contexto", "detail": "getSystemPrompt() le a nota ativa via getState() (nao assina activeContent).", "node": "vault-store", "edge": ["ai-panel", "vault-store"] },
+        { "title": "Chamar servico", "detail": "AIService.chat(messages, onChunk) escolhe o protocolo do provedor.", "node": "ai-service", "edge": ["ai-panel", "ai-service"] },
+        { "title": "Rate limit", "detail": "throttle antes da chamada (ex.: Gemma).", "node": "rate-limiter", "edge": ["ai-service", "rate-limiter"] },
+        { "title": "Streaming", "detail": "streamGenerateContent via Server-Sent Events; chunks acumulados.", "node": "ext-google", "edge": ["ai-service", "ext-google"] },
+        { "title": "Inserir no editor", "detail": "Resposta renderizada em markdown; botao insere no editor.", "node": "editor", "edge": ["ai-panel", "editor"] }
+      ]
+    },
+    {
+      "id": "preview-render",
+      "name": "Renderizacao do Preview",
+      "desc": "Conversao markdown->React com debounce, plugins customizados e Mermaid sob demanda.",
+      "steps": [
+        { "title": "Conteudo muda", "detail": "Editor atualiza activeContent no vault.store.", "node": "vault-store", "edge": ["editor", "vault-store"] },
+        { "title": "Debounce", "detail": "useDebouncedValue(200ms) evita reparse a cada tecla; flush ao trocar de nota.", "node": "debounce", "edge": ["preview", "debounce"] },
+        { "title": "Pipeline unified", "detail": "remark (parse/gfm/math/breaks) -> plugins (wikilink, callout, frontmatter, checkbox) -> rehype (katex, highlight) -> React.", "node": "preview", "edge": null },
+        { "title": "Mermaid lazy", "detail": "Bloco mermaid dispara import dinamico + fila global de render.", "node": "mermaid-loader", "edge": ["preview", "mermaid-loader"] }
+      ]
+    },
+    {
+      "id": "exportar-pdf",
+      "name": "Exportar PDF (offline)",
+      "desc": "Renderizacao em janela offscreen com assets locais e espera deterministica antes do printToPDF.",
+      "steps": [
+        { "title": "Exportar", "detail": "ExportModal converte a nota com pipeline unified proprio (mdToHtml).", "node": "export-modal", "edge": null },
+        { "title": "IPC de exportacao", "detail": "preload encaminha export:pdf.", "node": "preload", "edge": ["export-modal", "preload"] },
+        { "title": "Handler de exportacao", "detail": "export.handler injeta KaTeX/highlight/Mermaid inline (offline) em BrowserWindow offscreen.", "node": "export-handler", "edge": ["preload", "export-handler"] },
+        { "title": "Espera + PDF", "detail": "Aguarda window.__renderReady (fontes + mermaid) e chama printToPDF.", "node": "export-handler", "edge": null },
+        { "title": "Gravar arquivo", "detail": "Escreve o .pdf no destino escolhido.", "node": "fsys", "edge": ["export-handler", "fsys"] }
+      ]
+    },
+    {
+      "id": "preview-inline",
+      "name": "Preview inline no Editor",
+      "desc": "LaTeX e Mermaid renderizam no proprio editor (fora do cursor), via ViewPlugins sobre visibleRanges.",
+      "steps": [
+        { "title": "Escrever formula/diagrama", "detail": "Usuario digita $...$, $...$ ou bloco mermaid.", "node": "editor", "edge": null },
+        { "title": "ViewPlugin", "detail": "latex/mermaid.ext varrem apenas visibleRanges e substituem por widget quando o cursor esta fora.", "node": "editor-ext", "edge": ["editor", "editor-ext"] },
+        { "title": "Render compartilhado", "detail": "Mermaid usa a mesma instancia/fila do Preview (singleton).", "node": "mermaid-loader", "edge": ["editor-ext", "mermaid-loader"] }
+      ]
+    },
+    {
+      "id": "watcher",
+      "name": "Monitoramento em Tempo Real",
+      "desc": "Alteracoes externas ao vault atualizam a arvore e disparam reindexacao incremental.",
+      "steps": [
+        { "title": "Alteracao externa", "detail": "Um .md e criado/editado por outro app ou sync.", "node": "fsys", "edge": null },
+        { "title": "fs.watch detecta", "detail": "Watcher recursivo ignora .vellum e aplica debounce de 1,5s.", "node": "fs-handler", "edge": ["fs-handler", "fsys"] },
+        { "title": "Evento vault:changed", "detail": "Processo principal notifica o renderer.", "node": "app", "edge": ["fs-handler", "app"] },
+        { "title": "Reindexar", "detail": "App refaz readDir e setFiles -> reindexacao incremental (so o que mudou custa API).", "node": "vault-store", "edge": ["app", "vault-store"] }
+      ]
+    },
+    {
+      "id": "wikilinks-backlinks",
+      "name": "Wikilinks e Backlinks",
+      "desc": "Navegacao entre notas por [[wikilink]] e deteccao reversa de referencias.",
+      "steps": [
+        { "title": "Escrever [[Nota]]", "detail": "wikilink.ext realca links conhecidos vs quebrados (visibleRanges).", "node": "editor-ext", "edge": ["editor", "editor-ext"] },
+        { "title": "Abrir nota", "detail": "Ctrl+clique dispara o evento vellum:open-note.", "node": "app", "edge": ["editor-ext", "app"] },
+        { "title": "Carregar", "detail": "App resolve o arquivo, faz readFile e setActiveFile.", "node": "vault-store", "edge": ["app", "vault-store"] },
+        { "title": "Backlinks", "detail": "BacklinksPane varre fileContents por [[nome]] (alias/ancora).", "node": "backlinks", "edge": ["backlinks", "vault-store"] }
+      ]
+    },
+    {
+      "id": "excluir-restaurar",
+      "name": "Excluir e Restaurar (lixeira)",
+      "desc": "Exclusao move para a lixeira na raiz do vault; restauracao devolve ao local original.",
+      "steps": [
+        { "title": "Excluir nota", "detail": "FileTree chama fs:deleteFile(path, vaultPath).", "node": "filetree", "edge": ["filetree", "preload"] },
+        { "title": "Mover para lixeira", "detail": "fs.handler move para vault/.vellum/trash com caminho relativo codificado no nome.", "node": "trash", "edge": ["fs-handler", "trash"] },
+        { "title": "Banner desfazer", "detail": "StatusBar exibe 'Desfazer' com contagem de 10s.", "node": "statusbar", "edge": ["statusbar", "preload"] },
+        { "title": "Restaurar", "detail": "fs:restoreLastDeleted devolve a nota a subpasta original (recria se preciso).", "node": "fs-handler", "edge": ["fs-handler", "trash"] }
+      ]
+    }
+  ]
+};
+
+const GROUP_LABELS = {
+  ui: 'Interface (Renderer)', state: 'Estado (Zustand)', service: 'Serviços',
+  util: 'Utils', ipc: 'Ponte IPC', main: 'Processo Principal',
+  persist: 'Persistência', external: 'APIs Externas'
+};
+const GROUP_COLORS = {
+  ui: '#818cf8', state: '#c084fc', service: '#38bdf8', util: '#2dd4bf',
+  ipc: '#fbbf24', main: '#34d399', persist: '#94a3b8', external: '#fb7185'
+};
+const KIND_COLORS = {
+  ipc: '#fbbf24', api: '#fb7185', call: '#38bdf8', subscribe: '#a78bfa',
+  event: '#f97316', data: '#2dd4bf', contains: '#64748b', loads: '#64748b'
+};
+const KIND_LABELS = {
+  ipc: 'IPC', api: 'API externa', call: 'chamada', subscribe: 'estado',
+  event: 'evento', data: 'I/O disco', contains: 'compõe', loads: 'registra'
+};
+const LAYER_LABELS = [
+  'Interface (Renderer)', 'Estado (Zustand)', 'Serviços & Utils',
+  'Ponte IPC (preload)', 'Processo Principal (Electron)', 'Persistência & Externos'
+];
+
+const nodeById = Object.fromEntries(DATA.nodes.map(n => [n.id, n]));
+const el = {
+  layers: document.getElementById('layers'),
+  svg: document.getElementById('edges'),
+  diagram: document.getElementById('diagram'),
+  flowBar: document.getElementById('flow-bar'),
+  steps: document.getElementById('steps'),
+  flowTitle: document.getElementById('flow-title'),
+  flowDesc: document.getElementById('flow-desc'),
+  inspector: document.getElementById('inspector'),
+  legend: document.getElementById('legend'),
+};
+const nodeEls = {};
+const edgeEls = {};
+let activeFlow = null;
+
+// ─── Stats + legenda ─────────────────────────────────────────────────────────
+document.getElementById('stat-nodes').textContent = DATA.nodes.length;
+document.getElementById('stat-edges').textContent = DATA.edges.length;
+document.getElementById('stat-flows').textContent = DATA.flows.length;
+el.legend.innerHTML = Object.keys(KIND_LABELS).filter(k => DATA.edges.some(e => e.kind === k))
+  .map(k => `<span class="inline-flex items-center gap-1.5">
+    <span style="width:14px;height:2px;background:${KIND_COLORS[k]};display:inline-block;border-radius:2px"></span>${KIND_LABELS[k]}</span>`).join('');
+
+// ─── Render de nós por camada ────────────────────────────────────────────────
+const layerGroups = {};
+DATA.nodes.forEach(n => (layerGroups[n.layer] ??= []).push(n));
+
+Object.keys(layerGroups).sort((a,b)=>a-b).forEach(layer => {
+  const row = document.createElement('div');
+  row.className = 'mb-5 last:mb-0';
+  row.innerHTML = `<div class="text-[10px] uppercase tracking-widest text-slate-600 font-bold mb-2 pl-1">${LAYER_LABELS[layer] || ''}</div>`;
+  const chips = document.createElement('div');
+  chips.className = 'flex flex-wrap gap-2.5 justify-center';
+  layerGroups[layer].forEach(n => {
+    const c = GROUP_COLORS[n.group];
+    const d = document.createElement('button');
+    d.className = 'node text-left rounded-lg border bg-slate-900/80 border-slate-700/70 px-3 py-2 max-w-[210px]';
+    d.style.setProperty('--gc', c);
+    d.style.borderLeft = `3px solid ${c}`;
+    d.dataset.id = n.id;
+    d.innerHTML =
+      `<div class="text-[13px] font-semibold text-slate-100 leading-tight">${n.label}</div>
+       <div class="text-[10px] text-slate-500 mt-0.5 font-mono truncate">${n.file}</div>`;
+    d.addEventListener('click', (e) => { e.stopPropagation(); pickNode(n.id); });
+    d.addEventListener('mouseenter', () => { if (!activeFlow) hoverNode(n.id, true); });
+    d.addEventListener('mouseleave', () => { if (!activeFlow) hoverNode(n.id, false); });
+    chips.appendChild(d);
+    nodeEls[n.id] = d;
+  });
+  row.appendChild(chips);
+  el.layers.appendChild(row);
+});
+
+// ─── Arestas SVG ─────────────────────────────────────────────────────────────
+function center(node) {
+  const r = node.getBoundingClientRect();
+  const cr = el.diagram.getBoundingClientRect();
+  return {
+    x: r.left - cr.left + el.diagram.scrollLeft + r.width / 2,
+    y: r.top - cr.top + el.diagram.scrollTop + r.height / 2,
+    w: r.width, h: r.height
+  };
+}
+
+function buildEdges() {
+  [...el.svg.querySelectorAll('path')].forEach(p => p.remove());
+  const W = el.layers.scrollWidth, H = el.layers.scrollHeight;
+  el.svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  el.svg.style.width = W + 'px';
+  el.svg.style.height = H + 'px';
+
+  DATA.edges.forEach((e, i) => {
+    const s = nodeEls[e.source], t = nodeEls[e.target];
+    if (!s || !t) return;
+    const a = center(s), b = center(t);
+    // encurta a ponta ~ na borda do nó de destino
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const shorten = Math.min(len / 2, 34);
+    const ex = b.x - (dx / len) * shorten, ey = b.y - (dy / len) * shorten;
+
+    let c1x, c1y, c2x, c2y;
+    if (Math.abs(dy) >= Math.abs(dx)) {
+      c1x = a.x; c1y = a.y + dy * 0.42; c2x = ex; c2y = ey - dy * 0.42;
+    } else {
+      c1x = a.x + dx * 0.42; c1y = a.y; c2x = ex - dx * 0.42; c2y = ey;
+    }
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M ${a.x} ${a.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${ex} ${ey}`);
+    path.setAttribute('stroke', KIND_COLORS[e.kind] || '#475569');
+    path.setAttribute('stroke-opacity', '0.16');
+    path.setAttribute('stroke-width', '1.3');
+    path.setAttribute('marker-end', 'url(#arrow)');
+    path.style.color = KIND_COLORS[e.kind] || '#475569';
+    path.dataset.key = e.source + '__' + e.target;
+    path.dataset.source = e.source;
+    path.dataset.target = e.target;
+    el.svg.appendChild(path);
+    edgeEls[e.source + '__' + e.target] = path;
+  });
+}
+
+// ─── Interações ──────────────────────────────────────────────────────────────
+function clearHighlights() {
+  Object.values(nodeEls).forEach(n => n.classList.remove('dim','flow','step-active'));
+  Object.values(edgeEls).forEach(p => p.classList.remove('dim','flow','flow-step','hover-edge'));
+}
+
+function hoverNode(id, on) {
+  Object.values(edgeEls).forEach(p => {
+    if (p.dataset.source === id || p.dataset.target === id)
+      p.classList.toggle('hover-edge', on);
+  });
+}
+
+function pickNode(id) {
+  Object.values(nodeEls).forEach(n => n.classList.remove('picked'));
+  nodeEls[id].classList.add('picked');
+  const n = nodeById[id];
+  const c = GROUP_COLORS[n.group];
+  const outs = DATA.edges.filter(e => e.source === id);
+  const ins = DATA.edges.filter(e => e.target === id);
+  const list = (arr, dir) => arr.length ? arr.map(e => {
+    const other = dir === 'out' ? e.target : e.source;
+    const arrow = dir === 'out' ? '→' : '←';
+    return `<li class="flex items-start gap-1.5">
+      <span style="color:${KIND_COLORS[e.kind]}" class="mt-0.5">${arrow}</span>
+      <span><span class="text-slate-300">${nodeById[other].label}</span>
+      <span class="text-slate-600">· ${e.label}</span></span></li>`;
+  }).join('') : '<li class="text-slate-600">—</li>';
+
+  el.inspector.innerHTML = `
+    <div class="fade-in">
+      <div class="flex items-center gap-2 mb-1">
+        <span style="background:${c}" class="w-2.5 h-2.5 rounded-full"></span>
+        <span class="font-semibold text-slate-100 text-[15px]">${n.label}</span>
+      </div>
+      <div class="text-[11px] font-mono text-slate-500 mb-2">${n.file}</div>
+      <span class="inline-block text-[10px] px-2 py-0.5 rounded-full mb-3" style="background:${c}22;color:${c}">${GROUP_LABELS[n.group]}</span>
+      <p class="text-slate-300 text-[13px] leading-relaxed mb-3">${n.desc}</p>
+      <div class="grid grid-cols-2 gap-3 text-[12px]">
+        <div><div class="text-slate-500 mb-1 font-semibold">Saídas (${outs.length})</div><ul class="space-y-1">${list(outs,'out')}</ul></div>
+        <div><div class="text-slate-500 mb-1 font-semibold">Entradas (${ins.length})</div><ul class="space-y-1">${list(ins,'in')}</ul></div>
+      </div>
+    </div>`;
+}
+
+function selectFlow(flow) {
+  activeFlow = flow;
+  clearHighlights();
+  [...el.flowBar.children].forEach(b => b.classList.toggle('active', b.dataset.id === flow.id));
+
+  const nodesIn = new Set(), edgesIn = new Set();
+  flow.steps.forEach(s => {
+    nodesIn.add(s.node);
+    if (s.edge) { nodesIn.add(s.edge[0]); nodesIn.add(s.edge[1]); edgesIn.add(s.edge[0] + '__' + s.edge[1]); }
+  });
+
+  Object.entries(nodeEls).forEach(([id, n]) => n.classList.toggle('dim', !nodesIn.has(id)));
+  nodesIn.forEach(id => nodeEls[id]?.classList.add('flow'));
+  Object.entries(edgeEls).forEach(([k, p]) => {
+    p.classList.toggle('flow', edgesIn.has(k));
+    p.classList.toggle('dim', !edgesIn.has(k));
+  });
+
+  el.flowTitle.textContent = flow.name;
+  el.flowDesc.textContent = flow.desc;
+  el.steps.innerHTML = '';
+  flow.steps.forEach((s, i) => {
+    const li = document.createElement('li');
+    li.className = 'stepcard rounded-lg border border-slate-800 bg-slate-900/40 p-2.5 cursor-pointer fade-in';
+    li.innerHTML = `
+      <div class="flex items-start gap-2.5">
+        <span class="shrink-0 w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold flex items-center justify-center">${i+1}</span>
+        <div class="min-w-0">
+          <div class="text-[13px] font-semibold text-slate-100 leading-snug">${s.title}</div>
+          <div class="text-[11px] text-slate-400 mt-0.5 leading-relaxed">${s.detail}</div>
+          <div class="text-[10px] text-slate-600 mt-1 font-mono">${nodeById[s.node].label}${s.edge ? ' · ' + nodeById[s.edge[0]].label + ' → ' + nodeById[s.edge[1]].label : ''}</div>
+        </div>
+      </div>`;
+    li.addEventListener('click', () => focusStep(flow, i, li));
+    li.addEventListener('mouseenter', () => previewStep(s));
+    li.addEventListener('mouseleave', () => { if (!li.classList.contains('active')) unpreviewStep(s); });
+    el.steps.appendChild(li);
+  });
+}
+
+function previewStep(s) {
+  if (s.edge) edgeEls[s.edge[0]+'__'+s.edge[1]]?.classList.add('flow-step');
+  nodeEls[s.node]?.classList.add('step-active');
+}
+function unpreviewStep(s) {
+  if (s.edge) edgeEls[s.edge[0]+'__'+s.edge[1]]?.classList.remove('flow-step');
+  nodeEls[s.node]?.classList.remove('step-active');
+}
+function focusStep(flow, i, li) {
+  [...el.steps.children].forEach(c => c.classList.remove('active'));
+  Object.values(nodeEls).forEach(n => n.classList.remove('step-active'));
+  Object.values(edgeEls).forEach(p => p.classList.remove('flow-step'));
+  li.classList.add('active');
+  const s = flow.steps[i];
+  previewStep(s);
+  pickNode(s.node);
+}
+
+function resetView() {
+  activeFlow = null;
+  clearHighlights();
+  Object.values(nodeEls).forEach(n => n.classList.remove('picked'));
+  [...el.flowBar.children].forEach(b => b.classList.remove('active'));
+  el.flowTitle.textContent = 'Passo a passo';
+  el.flowDesc.textContent = 'Escolha um fluxo acima para ver os passos.';
+  el.steps.innerHTML = '<li class="text-xs text-slate-600 p-2">Nenhum fluxo selecionado.</li>';
+}
+
+// ─── Flow bar ────────────────────────────────────────────────────────────────
+const FLOW_HUES = ['#6366f1','#8b5cf6','#0ea5e9','#ec4899','#14b8a6','#f59e0b','#a855f7','#10b981','#f43f5e','#3b82f6'];
+DATA.flows.forEach((f, i) => {
+  const b = document.createElement('button');
+  b.className = 'flowbtn text-xs px-3 py-1.5 rounded-full border border-slate-700 bg-slate-900/60 text-slate-300 hover:border-slate-500 transition';
+  b.style.setProperty('--fc', FLOW_HUES[i % FLOW_HUES.length]);
+  b.dataset.id = f.id;
+  b.textContent = f.name;
+  b.addEventListener('click', () => selectFlow(f));
+  el.flowBar.appendChild(b);
+});
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+document.getElementById('reset-btn').addEventListener('click', resetView);
+el.diagram.addEventListener('click', () => {
+  Object.values(nodeEls).forEach(n => n.classList.remove('picked'));
+});
+
+function relayout() { buildEdges(); if (activeFlow) selectFlow(activeFlow); }
+window.addEventListener('load', () => { buildEdges(); resetView(); });
+let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(relayout, 150); });
+// primeira montagem (fontes podem mudar tamanhos)
+requestAnimationFrame(() => setTimeout(buildEdges, 60));
+</script>
+</body>
+</html>

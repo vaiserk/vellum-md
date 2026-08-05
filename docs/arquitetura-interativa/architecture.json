@@ -1,0 +1,251 @@
+{
+  "meta": {
+    "project": "VellumMD",
+    "description": "Editor de Markdown local-first (Electron + React + TypeScript) com busca semantica por embeddings e assistencia por LLMs.",
+    "generatedFor": "Agentes de IA e navegacao de arquitetura",
+    "stack": ["Electron 30", "React 18", "TypeScript 5", "Vite 5", "Zustand 4", "CodeMirror 6", "unified/remark/rehype", "KaTeX", "Mermaid 11"],
+    "groups": {
+      "ui": "Componentes React do processo de renderizacao",
+      "state": "Stores Zustand (estado global)",
+      "service": "Servicos de dominio (IA, embeddings, similaridade)",
+      "util": "Utilitarios compartilhados",
+      "ipc": "Ponte segura entre renderer e main (contextBridge)",
+      "main": "Processo principal do Electron (Node.js)",
+      "persist": "Persistencia local (sistema de arquivos)",
+      "external": "APIs externas de IA (unica saida de rede)"
+    }
+  },
+  "nodes": [
+    { "id": "app", "label": "App", "file": "src/App.tsx", "group": "ui", "layer": 0, "desc": "Raiz do renderer: layout, atalhos globais, efeitos de indexacao e file watcher, roteamento de eventos vellum:open-note e vault:changed." },
+    { "id": "sidebar", "label": "Sidebar", "file": "src/components/sidebar/Sidebar.tsx", "group": "ui", "layer": 0, "desc": "Abas Arquivos/Busca/Tags/Backlinks. Busca lexica + semantica unificada com debounce e guard de geracao." },
+    { "id": "filetree", "label": "FileTree", "file": "src/components/sidebar/FileTree.tsx", "group": "ui", "layer": 0, "desc": "Arvore de arquivos do vault; menu de contexto (renomear, excluir)." },
+    { "id": "backlinks", "label": "BacklinksPane", "file": "src/components/sidebar/BacklinksPane.tsx", "group": "ui", "layer": 0, "desc": "Lista notas que referenciam a nota ativa via [[wikilink]] (suporta alias e ancora)." },
+    { "id": "editor", "label": "Editor", "file": "src/components/editor/Editor.tsx", "group": "ui", "layer": 0, "desc": "Nucleo CodeMirror 6: auto-save com debounce e flush ao trocar de nota, keymap proprio, sync externo." },
+    { "id": "editor-ext", "label": "Editor Extensions", "file": "src/components/editor/extensions/*", "group": "ui", "layer": 0, "desc": "ViewPlugins: wikilink, latex inline, mermaid inline, slash-commands, ai-context-menu, typewriter." },
+    { "id": "preview", "label": "Preview", "file": "src/components/preview/Preview.tsx", "group": "ui", "layer": 0, "desc": "Pipeline unified markdown->React com debounce de 200ms; plugins de wikilink, callout, math, checkbox; mermaid lazy." },
+    { "id": "ai-panel", "label": "AIPanel", "file": "src/components/ai/AIPanel.tsx", "group": "ui", "layer": 0, "desc": "Chat contextual: injeta a nota ativa no system prompt e renderiza streaming; acoes rapidas." },
+    { "id": "link-suggestion", "label": "LinkSuggestion", "file": "src/components/ai/LinkSuggestion.tsx", "group": "ui", "layer": 0, "desc": "Sugere wikilinks para notas semanticamente relacionadas ao trecho em edicao." },
+    { "id": "statusbar", "label": "StatusBar", "file": "src/components/statusbar/StatusBar.tsx", "group": "ui", "layer": 0, "desc": "Contadores (palavras/caracteres), posicao do cursor, status de salvamento, banner de desfazer exclusao." },
+    { "id": "command-palette", "label": "CommandPalette", "file": "src/components/modals/CommandPalette.tsx", "group": "ui", "layer": 0, "desc": "Paleta de comandos (Ctrl+P): acoes de arquivo, editor e configuracoes." },
+    { "id": "settings-modal", "label": "SettingsModal", "file": "src/components/modals/SettingsModal.tsx", "group": "ui", "layer": 0, "desc": "Configura provedores/modelos de IA e embedding, chaves, e reindexacao manual." },
+    { "id": "export-modal", "label": "ExportModal", "file": "src/components/modals/ExportModal.tsx", "group": "ui", "layer": 0, "desc": "Exporta PDF/slides/site; pipeline unified proprio + plugins de callout e wikilink->ancora." },
+    { "id": "new-note-modal", "label": "NewNoteModal", "file": "src/components/modals/NewNoteModal.tsx", "group": "ui", "layer": 0, "desc": "Cria nota (com geracao opcional por IA)." },
+    { "id": "onboarding", "label": "OnboardingWizard", "file": "src/components/modals/OnboardingWizard.tsx", "group": "ui", "layer": 0, "desc": "Assistente de primeira execucao (configura vault e chaves)." },
+
+    { "id": "vault-store", "label": "vault.store", "file": "src/store/vault.store.ts", "group": "state", "layer": 1, "desc": "Estado do vault: arquivos, nota ativa, indices (embedding/passagem/tag), fileContents; buildEmbeddingIndex e loadTagsOnly." },
+    { "id": "settings-store", "label": "settings.store", "file": "src/store/settings.store.ts", "group": "state", "layer": 1, "desc": "Config persistida (localStorage) com versionamento/migracao: provedores, modelos, chaves, preferencias." },
+
+    { "id": "ai-service", "label": "ai.service", "file": "src/services/ai.service.ts", "group": "service", "layer": 2, "desc": "Cliente de chat multiprotocolo (OpenAI-compat, Anthropic nativo, Gemma/Google nativo) com streaming SSE." },
+    { "id": "embedding-service", "label": "embedding.service", "file": "src/services/embedding.service.ts", "group": "service", "layer": 2, "desc": "embed/embedBatch (batchEmbedContents, 768 dims), limpeza de markdown, segmentacao em passagens, extracao de tags." },
+    { "id": "similarity", "label": "similarity", "file": "src/services/similarity.ts", "group": "service", "layer": 2, "desc": "cosineSimilarity e topKSimilar (ranqueia o indice em memoria)." },
+    { "id": "rate-limiter", "label": "model-limits", "file": "src/config/model-limits.ts", "group": "service", "layer": 2, "desc": "Rate limiter por janela deslizante (RPM por modelo) com espera automatica; compartilhado por chat e embeddings." },
+    { "id": "utils-files", "label": "utils/files", "file": "src/utils/files.ts", "group": "util", "layer": 2, "desc": "flattenFiles e buildKnownNotes (fonte unica; antes duplicados em 4 arquivos)." },
+    { "id": "mermaid-loader", "label": "mermaid-loader", "file": "src/utils/mermaid-loader.ts", "group": "util", "layer": 2, "desc": "Lazy import do Mermaid + fila global de renderizacao, compartilhada por Preview e editor (singleton)." },
+    { "id": "debounce", "label": "useDebouncedValue", "file": "src/utils/useDebouncedValue.ts", "group": "util", "layer": 2, "desc": "Hook de debounce com flushKey (aplica imediatamente ao trocar de chave)." },
+
+    { "id": "preload", "label": "preload", "file": "electron/preload.ts", "group": "ipc", "layer": 3, "desc": "contextBridge: expoe window.electron.{fs,export,shell} ao renderer sem acesso direto ao Node." },
+
+    { "id": "main", "label": "main", "file": "electron/main.ts", "group": "main", "layer": 4, "desc": "Cria a BrowserWindow (contextIsolation, sem nodeIntegration) e registra os handlers IPC." },
+    { "id": "fs-handler", "label": "fs.handler", "file": "electron/handlers/fs.handler.ts", "group": "main", "layer": 4, "desc": "IPC de arquivos: vault, leitura/escrita, lixeira, cache de embeddings, file watcher, openExternal com whitelist." },
+    { "id": "export-handler", "label": "export.handler", "file": "electron/handlers/export.handler.ts", "group": "main", "layer": 4, "desc": "Exportacao PDF (BrowserWindow offscreen, assets inline offline, espera deterministica), slides (Reveal.js) e site estatico." },
+
+    { "id": "fsys", "label": "Sistema de Arquivos", "file": "vault/*.md", "group": "persist", "layer": 5, "desc": "Vault do usuario: arquivos .md puros, portateis, sem banco de dados." },
+    { "id": "cache", "label": "Cache de Embeddings", "file": "vault/.vellum/embeddings.json", "group": "persist", "layer": 5, "desc": "Vetores por arquivo (mtime + embedding + passagens), com provider/model/dimensions para invalidacao." },
+    { "id": "trash", "label": "Lixeira", "file": "vault/.vellum/trash/", "group": "persist", "layer": 5, "desc": "Notas excluidas (caminho relativo codificado no nome) para restauracao no local original." },
+
+    { "id": "ext-google", "label": "Google AI (Gemini/Gemma)", "file": "generativelanguage.googleapis.com", "group": "external", "layer": 5, "desc": "Embeddings (batchEmbedContents) e chat (streamGenerateContent). Unica saida de rede junto das demais APIs." },
+    { "id": "ext-openai", "label": "OpenAI API", "file": "api.openai.com", "group": "external", "layer": 5, "desc": "Chat e embeddings (alternativos, configuraveis)." },
+    { "id": "ext-anthropic", "label": "Anthropic API", "file": "api.anthropic.com", "group": "external", "layer": 5, "desc": "Chat (Claude) via API nativa." },
+    { "id": "ext-groq", "label": "Groq API", "file": "api.groq.com", "group": "external", "layer": 5, "desc": "Chat (OpenAI-compativel)." }
+  ],
+  "edges": [
+    { "source": "app", "target": "vault-store", "kind": "subscribe", "label": "assina/estado" },
+    { "source": "app", "target": "settings-store", "kind": "subscribe", "label": "assina" },
+    { "source": "sidebar", "target": "vault-store", "kind": "subscribe", "label": "assina" },
+    { "source": "sidebar", "target": "settings-store", "kind": "subscribe", "label": "assina" },
+    { "source": "editor", "target": "vault-store", "kind": "subscribe", "label": "assina/atualiza" },
+    { "source": "editor", "target": "settings-store", "kind": "subscribe", "label": "assina" },
+    { "source": "preview", "target": "vault-store", "kind": "subscribe", "label": "assina" },
+    { "source": "ai-panel", "target": "vault-store", "kind": "subscribe", "label": "getState (nota ativa)" },
+    { "source": "statusbar", "target": "vault-store", "kind": "subscribe", "label": "assina" },
+    { "source": "filetree", "target": "vault-store", "kind": "subscribe", "label": "assina" },
+    { "source": "backlinks", "target": "vault-store", "kind": "subscribe", "label": "varre fileContents" },
+    { "source": "link-suggestion", "target": "vault-store", "kind": "subscribe", "label": "assina indice" },
+    { "source": "link-suggestion", "target": "settings-store", "kind": "subscribe", "label": "assina" },
+    { "source": "settings-modal", "target": "settings-store", "kind": "subscribe", "label": "le/grava config" },
+    { "source": "export-modal", "target": "vault-store", "kind": "subscribe", "label": "assina" },
+    { "source": "new-note-modal", "target": "vault-store", "kind": "subscribe", "label": "assina" },
+    { "source": "command-palette", "target": "vault-store", "kind": "subscribe", "label": "acoes" },
+
+    { "source": "editor", "target": "editor-ext", "kind": "contains", "label": "compoe extensoes" },
+
+    { "source": "vault-store", "target": "embedding-service", "kind": "call", "label": "embedBatch" },
+    { "source": "vault-store", "target": "utils-files", "kind": "call", "label": "flattenFiles" },
+    { "source": "sidebar", "target": "embedding-service", "kind": "call", "label": "embed(query)" },
+    { "source": "sidebar", "target": "similarity", "kind": "call", "label": "topKSimilar" },
+    { "source": "sidebar", "target": "utils-files", "kind": "call", "label": "flattenFiles" },
+    { "source": "link-suggestion", "target": "embedding-service", "kind": "call", "label": "embed" },
+    { "source": "link-suggestion", "target": "similarity", "kind": "call", "label": "topKSimilar" },
+    { "source": "ai-panel", "target": "ai-service", "kind": "call", "label": "chat(streaming)" },
+    { "source": "ai-panel", "target": "editor", "kind": "call", "label": "inserir no editor" },
+    { "source": "new-note-modal", "target": "ai-service", "kind": "call", "label": "gerar nota" },
+    { "source": "embedding-service", "target": "rate-limiter", "kind": "call", "label": "throttle (RPM)" },
+    { "source": "ai-service", "target": "rate-limiter", "kind": "call", "label": "throttle" },
+    { "source": "ai-service", "target": "settings-store", "kind": "call", "label": "getState (chave)" },
+    { "source": "preview", "target": "mermaid-loader", "kind": "call", "label": "enqueueMermaidRender" },
+    { "source": "editor-ext", "target": "mermaid-loader", "kind": "call", "label": "enqueueMermaidRender" },
+    { "source": "preview", "target": "debounce", "kind": "call", "label": "useDebouncedValue" },
+    { "source": "preview", "target": "utils-files", "kind": "call", "label": "buildKnownNotes" },
+
+    { "source": "ai-service", "target": "ext-google", "kind": "api", "label": "streamGenerateContent" },
+    { "source": "ai-service", "target": "ext-openai", "kind": "api", "label": "chat/completions" },
+    { "source": "ai-service", "target": "ext-anthropic", "kind": "api", "label": "v1/messages" },
+    { "source": "ai-service", "target": "ext-groq", "kind": "api", "label": "chat/completions" },
+    { "source": "embedding-service", "target": "ext-google", "kind": "api", "label": "batchEmbedContents" },
+    { "source": "embedding-service", "target": "ext-openai", "kind": "api", "label": "v1/embeddings" },
+
+    { "source": "app", "target": "preload", "kind": "ipc", "label": "window.electron.fs" },
+    { "source": "sidebar", "target": "preload", "kind": "ipc", "label": "openVault/readDir/readFile" },
+    { "source": "editor", "target": "preload", "kind": "ipc", "label": "writeFile" },
+    { "source": "vault-store", "target": "preload", "kind": "ipc", "label": "read/writeEmbeddingCache" },
+    { "source": "export-modal", "target": "preload", "kind": "ipc", "label": "export:*" },
+    { "source": "filetree", "target": "preload", "kind": "ipc", "label": "deleteFile/renameFile" },
+    { "source": "statusbar", "target": "preload", "kind": "ipc", "label": "restoreLastDeleted" },
+    { "source": "preload", "target": "fs-handler", "kind": "ipc", "label": "ipcRenderer.invoke(fs:*)" },
+    { "source": "preload", "target": "export-handler", "kind": "ipc", "label": "ipcRenderer.invoke(export:*)" },
+
+    { "source": "fs-handler", "target": "fsys", "kind": "data", "label": "read/write/watch" },
+    { "source": "fs-handler", "target": "cache", "kind": "data", "label": "le/grava cache" },
+    { "source": "fs-handler", "target": "trash", "kind": "data", "label": "move/restaura" },
+    { "source": "export-handler", "target": "fsys", "kind": "data", "label": "grava PDF/site" },
+
+    { "source": "main", "target": "preload", "kind": "loads", "label": "carrega preload" },
+    { "source": "main", "target": "fs-handler", "kind": "loads", "label": "registra handlers" },
+    { "source": "main", "target": "export-handler", "kind": "loads", "label": "registra handlers" },
+
+    { "source": "editor-ext", "target": "app", "kind": "event", "label": "vellum:open-note" },
+    { "source": "preview", "target": "app", "kind": "event", "label": "vellum:open-note" },
+    { "source": "fs-handler", "target": "app", "kind": "event", "label": "vault:changed" }
+  ],
+  "flows": [
+    {
+      "id": "abrir-indexar",
+      "name": "Abrir Vault e Indexar",
+      "desc": "Selecao do vault, leitura da arvore e construcao incremental do indice semantico (cache por mtime, embeddings em lote).",
+      "steps": [
+        { "title": "Abrir vault", "detail": "Sidebar chama window.electron.fs.openVault() e depois readDir().", "node": "sidebar", "edge": ["sidebar", "preload"] },
+        { "title": "IPC de arquivos", "detail": "preload encaminha fs:openVault / fs:readDir ao processo principal.", "node": "preload", "edge": ["preload", "fs-handler"] },
+        { "title": "Ler arvore", "detail": "fs.handler percorre o diretorio recursivamente (ignora dotfiles) e devolve FileNode[] com mtime.", "node": "fs-handler", "edge": ["fs-handler", "fsys"] },
+        { "title": "setFiles dispara efeito", "detail": "App observa files e chama buildEmbeddingIndex() (fallback loadTagsOnly sem chave).", "node": "vault-store", "edge": ["app", "vault-store"] },
+        { "title": "Ler cache", "detail": "Le .vellum/embeddings.json; valida provider/model/dimensions e reaproveita vetores por mtime.", "node": "cache", "edge": ["fs-handler", "cache"] },
+        { "title": "Embutir em lote", "detail": "Arquivos novos/modificados: embedBatch([documento, ...passagens]) em 1 requisicao.", "node": "embedding-service", "edge": ["vault-store", "embedding-service"] },
+        { "title": "Rate limit", "detail": "throttle respeita o RPM do modelo antes de cada chamada.", "node": "rate-limiter", "edge": ["embedding-service", "rate-limiter"] },
+        { "title": "API de embeddings", "detail": "batchEmbedContents com outputDimensionality 768 (RETRIEVAL_DOCUMENT).", "node": "ext-google", "edge": ["embedding-service", "ext-google"] },
+        { "title": "Gravar cache", "detail": "Cache atualizado incrementalmente (a cada 10 arquivos) e indices em memoria prontos.", "node": "cache", "edge": ["fs-handler", "cache"] }
+      ]
+    },
+    {
+      "id": "editar-salvar",
+      "name": "Editar e Salvar (auto-save)",
+      "desc": "Digitacao no editor com salvamento automatico por debounce e flush ao trocar de nota.",
+      "steps": [
+        { "title": "Digitar", "detail": "Usuario edita no CodeMirror; updateListener captura docChanged.", "node": "editor", "edge": null },
+        { "title": "Atualizar estado", "detail": "setActiveContent(conteudo) e setSaveStatus('saving').", "node": "vault-store", "edge": ["editor", "vault-store"] },
+        { "title": "Gravar (debounce)", "detail": "Apos o intervalo configuravel, fs:writeFile persiste; troca de nota faz flush imediato.", "node": "preload", "edge": ["editor", "preload"] },
+        { "title": "Escrever arquivo", "detail": "fs.handler grava o .md no disco.", "node": "fs-handler", "edge": ["fs-handler", "fsys"] },
+        { "title": "Status salvo", "detail": "setSaveStatus('saved') reflete na StatusBar.", "node": "statusbar", "edge": ["statusbar", "vault-store"] }
+      ]
+    },
+    {
+      "id": "busca-semantica",
+      "name": "Busca Semantica",
+      "desc": "Consulta vetorizada e comparada por similaridade de cosseno contra o indice, combinada com busca lexica.",
+      "steps": [
+        { "title": "Digitar consulta", "detail": "Aba Busca da Sidebar; debounce de 400ms e guard de geracao.", "node": "sidebar", "edge": null },
+        { "title": "Vetorizar consulta", "detail": "embed(query, RETRIEVAL_QUERY) — assimetrico em relacao aos documentos.", "node": "embedding-service", "edge": ["sidebar", "embedding-service"] },
+        { "title": "API de embeddings", "detail": "embedContent (768 dims) para a consulta.", "node": "ext-google", "edge": ["embedding-service", "ext-google"] },
+        { "title": "Ranquear", "detail": "topKSimilar(query, embeddingIndex) filtrado por limiar.", "node": "similarity", "edge": ["sidebar", "similarity"] },
+        { "title": "Melhor passagem", "detail": "Le passageIndex para exibir o trecho mais relevante de cada nota.", "node": "vault-store", "edge": ["sidebar", "vault-store"] }
+      ]
+    },
+    {
+      "id": "assistente-ia",
+      "name": "Assistente de IA (chat)",
+      "desc": "Chat contextual com a nota ativa, resposta em streaming (SSE) e insercao no editor.",
+      "steps": [
+        { "title": "Enviar mensagem", "detail": "Usuario envia texto ou aciona uma acao rapida.", "node": "ai-panel", "edge": null },
+        { "title": "Montar contexto", "detail": "getSystemPrompt() le a nota ativa via getState() (nao assina activeContent).", "node": "vault-store", "edge": ["ai-panel", "vault-store"] },
+        { "title": "Chamar servico", "detail": "AIService.chat(messages, onChunk) escolhe o protocolo do provedor.", "node": "ai-service", "edge": ["ai-panel", "ai-service"] },
+        { "title": "Rate limit", "detail": "throttle antes da chamada (ex.: Gemma).", "node": "rate-limiter", "edge": ["ai-service", "rate-limiter"] },
+        { "title": "Streaming", "detail": "streamGenerateContent via Server-Sent Events; chunks acumulados.", "node": "ext-google", "edge": ["ai-service", "ext-google"] },
+        { "title": "Inserir no editor", "detail": "Resposta renderizada em markdown; botao insere no editor.", "node": "editor", "edge": ["ai-panel", "editor"] }
+      ]
+    },
+    {
+      "id": "preview-render",
+      "name": "Renderizacao do Preview",
+      "desc": "Conversao markdown->React com debounce, plugins customizados e Mermaid sob demanda.",
+      "steps": [
+        { "title": "Conteudo muda", "detail": "Editor atualiza activeContent no vault.store.", "node": "vault-store", "edge": ["editor", "vault-store"] },
+        { "title": "Debounce", "detail": "useDebouncedValue(200ms) evita reparse a cada tecla; flush ao trocar de nota.", "node": "debounce", "edge": ["preview", "debounce"] },
+        { "title": "Pipeline unified", "detail": "remark (parse/gfm/math/breaks) -> plugins (wikilink, callout, frontmatter, checkbox) -> rehype (katex, highlight) -> React.", "node": "preview", "edge": null },
+        { "title": "Mermaid lazy", "detail": "Bloco mermaid dispara import dinamico + fila global de render.", "node": "mermaid-loader", "edge": ["preview", "mermaid-loader"] }
+      ]
+    },
+    {
+      "id": "exportar-pdf",
+      "name": "Exportar PDF (offline)",
+      "desc": "Renderizacao em janela offscreen com assets locais e espera deterministica antes do printToPDF.",
+      "steps": [
+        { "title": "Exportar", "detail": "ExportModal converte a nota com pipeline unified proprio (mdToHtml).", "node": "export-modal", "edge": null },
+        { "title": "IPC de exportacao", "detail": "preload encaminha export:pdf.", "node": "preload", "edge": ["export-modal", "preload"] },
+        { "title": "Handler de exportacao", "detail": "export.handler injeta KaTeX/highlight/Mermaid inline (offline) em BrowserWindow offscreen.", "node": "export-handler", "edge": ["preload", "export-handler"] },
+        { "title": "Espera + PDF", "detail": "Aguarda window.__renderReady (fontes + mermaid) e chama printToPDF.", "node": "export-handler", "edge": null },
+        { "title": "Gravar arquivo", "detail": "Escreve o .pdf no destino escolhido.", "node": "fsys", "edge": ["export-handler", "fsys"] }
+      ]
+    },
+    {
+      "id": "preview-inline",
+      "name": "Preview inline no Editor",
+      "desc": "LaTeX e Mermaid renderizam no proprio editor (fora do cursor), via ViewPlugins sobre visibleRanges.",
+      "steps": [
+        { "title": "Escrever formula/diagrama", "detail": "Usuario digita $...$, $$...$$ ou bloco mermaid.", "node": "editor", "edge": null },
+        { "title": "ViewPlugin", "detail": "latex/mermaid.ext varrem apenas visibleRanges e substituem por widget quando o cursor esta fora.", "node": "editor-ext", "edge": ["editor", "editor-ext"] },
+        { "title": "Render compartilhado", "detail": "Mermaid usa a mesma instancia/fila do Preview (singleton).", "node": "mermaid-loader", "edge": ["editor-ext", "mermaid-loader"] }
+      ]
+    },
+    {
+      "id": "watcher",
+      "name": "Monitoramento em Tempo Real",
+      "desc": "Alteracoes externas ao vault atualizam a arvore e disparam reindexacao incremental.",
+      "steps": [
+        { "title": "Alteracao externa", "detail": "Um .md e criado/editado por outro app ou sync.", "node": "fsys", "edge": null },
+        { "title": "fs.watch detecta", "detail": "Watcher recursivo ignora .vellum e aplica debounce de 1,5s.", "node": "fs-handler", "edge": ["fs-handler", "fsys"] },
+        { "title": "Evento vault:changed", "detail": "Processo principal notifica o renderer.", "node": "app", "edge": ["fs-handler", "app"] },
+        { "title": "Reindexar", "detail": "App refaz readDir e setFiles -> reindexacao incremental (so o que mudou custa API).", "node": "vault-store", "edge": ["app", "vault-store"] }
+      ]
+    },
+    {
+      "id": "wikilinks-backlinks",
+      "name": "Wikilinks e Backlinks",
+      "desc": "Navegacao entre notas por [[wikilink]] e deteccao reversa de referencias.",
+      "steps": [
+        { "title": "Escrever [[Nota]]", "detail": "wikilink.ext realca links conhecidos vs quebrados (visibleRanges).", "node": "editor-ext", "edge": ["editor", "editor-ext"] },
+        { "title": "Abrir nota", "detail": "Ctrl+clique dispara o evento vellum:open-note.", "node": "app", "edge": ["editor-ext", "app"] },
+        { "title": "Carregar", "detail": "App resolve o arquivo, faz readFile e setActiveFile.", "node": "vault-store", "edge": ["app", "vault-store"] },
+        { "title": "Backlinks", "detail": "BacklinksPane varre fileContents por [[nome]] (alias/ancora).", "node": "backlinks", "edge": ["backlinks", "vault-store"] }
+      ]
+    },
+    {
+      "id": "excluir-restaurar",
+      "name": "Excluir e Restaurar (lixeira)",
+      "desc": "Exclusao move para a lixeira na raiz do vault; restauracao devolve ao local original.",
+      "steps": [
+        { "title": "Excluir nota", "detail": "FileTree chama fs:deleteFile(path, vaultPath).", "node": "filetree", "edge": ["filetree", "preload"] },
+        { "title": "Mover para lixeira", "detail": "fs.handler move para vault/.vellum/trash com caminho relativo codificado no nome.", "node": "trash", "edge": ["fs-handler", "trash"] },
+        { "title": "Banner desfazer", "detail": "StatusBar exibe 'Desfazer' com contagem de 10s.", "node": "statusbar", "edge": ["statusbar", "preload"] },
+        { "title": "Restaurar", "detail": "fs:restoreLastDeleted devolve a nota a subpasta original (recria se preciso).", "node": "fs-handler", "edge": ["fs-handler", "trash"] }
+      ]
+    }
+  ]
+}
