@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<title>Capítulo 3 — Modelagem e Desenvolvimento</title>
+<style>
+  body { font-family: 'Times New Roman', Georgia, serif; font-size: 12pt; line-height: 1.5;
+         max-width: 800px; margin: 24px auto; padding: 0 16px; color: #000; }
+  h1 { font-size: 15pt; } h2 { font-size: 13pt; } h3 { font-size: 12pt; }
+  h1,h2,h3 { font-weight: bold; margin: 1.2em 0 .5em; }
+  p { text-align: justify; margin: .5em 0; }
+  table { border-collapse: collapse; width: 100%; margin: .3em 0 .2em; font-size: 11pt; }
+  th, td { border: 1px solid #000; padding: 5px 8px; vertical-align: top; text-align: left; }
+  th { background: #eee; font-weight: bold; }
+  code { font-family: Consolas, monospace; font-size: 10pt; background: #f4f4f4; padding: 1px 3px; }
+  pre { background: #f6f6f6; border: 1px solid #ccc; padding: 10px; overflow-x: auto;
+        font-family: Consolas, monospace; font-size: 9.5pt; }
+  pre::before { content: "▼ Código PlantUML — gere a imagem em plantuml.com e substitua por ela no Word";
+        display: block; color: #a00; font-family: Georgia, serif; font-size: 9pt; margin-bottom: 6px; }
+  strong { font-weight: bold; }
+</style></head><body>
+<div style="background:#fffbe6;border:1px solid #e0c000;padding:8px 12px;font-family:Georgia,serif;font-size:10pt;margin-bottom:18px">
+  <b>Como usar:</b> selecione tudo (Ctrl+A), copie (Ctrl+C) e cole no Word (Ctrl+V). As tabelas
+  entram como tabelas de verdade e os títulos como títulos. Depois aplique os estilos do seu
+  template. Os blocos de PlantUML devem ser <b>substituídos pelas imagens</b> geradas a partir
+  dos arquivos <code>.puml</code> (veja o LEIA-ME).
+</div>
+<h1>3 MODELAGEM E DESENVOLVIMENTO</h1>
+<p>Este capítulo apresenta a modelagem do sistema VellumMD e as decisões que orientaram
+seu desenvolvimento. Inicialmente são especificados os requisitos funcionais e não
+funcionais, que delimitam, respectivamente, os serviços que o software deve prestar e as
+restrições de qualidade sob as quais esses serviços devem operar. Em seguida, a
+estrutura e o comportamento do sistema são descritos por meio de diagramas da Linguagem
+de Modelagem Unificada (UML): o diagrama de casos de uso e seus respectivos casos de uso
+expandidos, o diagrama de classes e os diagramas de sequência. Por fim, é apresentado o
+conjunto de ferramentas e tecnologias empregadas, relacionando cada uma à sua função
+geral e à sua função específica no projeto.</p>
+<p>A modelagem seguiu a orientação de que a UML deve ser empregada como apoio à comunicação
+e ao entendimento do sistema, e não como um fim em si mesma, adotando-se apenas os
+diagramas que agregam valor à compreensão do software (FOWLER, 2005, p. 25). Cabe
+registrar que os diagramas de classes deste capítulo representam um modelo conceitual de
+domínio, e não uma transcrição literal do código-fonte: na implementação, as entidades
+modeladas materializam-se como módulos de serviço, repositórios de estado e componentes
+de interface, conforme detalhado ao longo do capítulo.</p>
+<h2>3.1 REQUISITOS DO SISTEMA</h2>
+<p>A engenharia de requisitos abrange o conjunto de atividades que leva ao entendimento e à
+especificação daquilo que o software deve fazer, servindo de ponte entre a necessidade do
+usuário e o projeto da solução (PRESSMAN; MAXIM, 2021). A partir desse entendimento, os
+requisitos foram organizados em duas categorias. Os requisitos funcionais descrevem as
+funções e os serviços que o sistema deve oferecer; os requisitos não funcionais expressam
+restrições e atributos de qualidade — tais como desempenho, segurança e portabilidade —
+que qualificam a forma como esses serviços são entregues (PRESSMAN; MAXIM, 2021).</p>
+<h3>3.1.1 Requisitos Funcionais</h3>
+<p>O Quadro 1 relaciona os requisitos funcionais (RF) identificados para o VellumMD. Cada
+requisito recebeu um identificador único, uma descrição do serviço esperado e uma
+prioridade (Essencial, Importante ou Desejável), classificação que apoia o planejamento
+incremental do desenvolvimento.</p>
+<p><strong>Quadro 1 – Requisitos funcionais do VellumMD</strong></p>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requisito</th>
+<th>Descrição</th>
+<th>Prioridade</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RF01</td>
+<td>Abrir vault</td>
+<td>Permitir a seleção de uma pasta local do sistema de arquivos como <em>vault</em> de trabalho.</td>
+<td>Essencial</td>
+</tr>
+<tr>
+<td>RF02</td>
+<td>Listar notas</td>
+<td>Listar recursivamente, em uma árvore de navegação, os arquivos Markdown (<code>.md</code>) contidos no <em>vault</em>.</td>
+<td>Essencial</td>
+</tr>
+<tr>
+<td>RF03</td>
+<td>Criar nota</td>
+<td>Criar uma nova nota Markdown no <em>vault</em>, opcionalmente com conteúdo inicial gerado por IA.</td>
+<td>Essencial</td>
+</tr>
+<tr>
+<td>RF04</td>
+<td>Renomear nota</td>
+<td>Renomear uma nota existente.</td>
+<td>Importante</td>
+</tr>
+<tr>
+<td>RF05</td>
+<td>Excluir e restaurar nota</td>
+<td>Excluir uma nota movendo-a para uma lixeira interna e permitir a restauração da última nota excluída.</td>
+<td>Importante</td>
+</tr>
+<tr>
+<td>RF06</td>
+<td>Editar nota</td>
+<td>Editar o conteúdo da nota em um editor de texto com realce de sintaxe Markdown, histórico de desfazer/refazer e quebra automática de linha.</td>
+<td>Essencial</td>
+</tr>
+<tr>
+<td>RF07</td>
+<td>Salvamento automático</td>
+<td>Persistir automaticamente as alterações da nota após um intervalo configurável de inatividade.</td>
+<td>Essencial</td>
+</tr>
+<tr>
+<td>RF08</td>
+<td>Pré-visualização</td>
+<td>Renderizar a nota ativa em HTML formatado, em painel sincronizado com o editor.</td>
+<td>Essencial</td>
+</tr>
+<tr>
+<td>RF09</td>
+<td>Fórmulas matemáticas</td>
+<td>Renderizar fórmulas em notação LaTeX, tanto na pré-visualização quanto de forma embutida no editor.</td>
+<td>Importante</td>
+</tr>
+<tr>
+<td>RF10</td>
+<td>Diagramas</td>
+<td>Renderizar diagramas descritos em sintaxe Mermaid.</td>
+<td>Importante</td>
+</tr>
+<tr>
+<td>RF11</td>
+<td>Wikilinks</td>
+<td>Reconhecer referências no formato <code>[[Nota]]</code>, com autocompletar e navegação entre notas, incluindo apelidos e âncoras de seção.</td>
+<td>Essencial</td>
+</tr>
+<tr>
+<td>RF12</td>
+<td>Backlinks</td>
+<td>Exibir, para a nota ativa, a lista de notas que a referenciam.</td>
+<td>Importante</td>
+</tr>
+<tr>
+<td>RF13</td>
+<td>Callouts e tarefas</td>
+<td>Suportar blocos de destaque (<em>callouts</em>) e listas de tarefas interativas sincronizadas com o arquivo.</td>
+<td>Desejável</td>
+</tr>
+<tr>
+<td>RF14</td>
+<td>Comandos rápidos</td>
+<td>Oferecer comandos de barra (<em>slash</em>) no editor e uma paleta de comandos global.</td>
+<td>Desejável</td>
+</tr>
+<tr>
+<td>RF15</td>
+<td>Organização por tags</td>
+<td>Extrair <em>tags</em> do <em>frontmatter</em> das notas e permitir a filtragem por <em>tag</em>.</td>
+<td>Importante</td>
+</tr>
+<tr>
+<td>RF16</td>
+<td>Busca léxica</td>
+<td>Localizar notas por correspondência de termos no título e no conteúdo.</td>
+<td>Essencial</td>
+</tr>
+<tr>
+<td>RF17</td>
+<td>Busca semântica</td>
+<td>Localizar notas por similaridade de significado, comparando o vetor de <em>embedding</em> da consulta com o índice do <em>vault</em>.</td>
+<td>Essencial</td>
+</tr>
+<tr>
+<td>RF18</td>
+<td>Indexação incremental</td>
+<td>Construir e manter o índice semântico de forma incremental, reaproveitando resultados em <em>cache</em> para arquivos não modificados.</td>
+<td>Essencial</td>
+</tr>
+<tr>
+<td>RF19</td>
+<td>Sugestão de conexões</td>
+<td>Sugerir automaticamente, durante a escrita, <em>wikilinks</em> para notas semanticamente relacionadas.</td>
+<td>Desejável</td>
+</tr>
+<tr>
+<td>RF20</td>
+<td>Assistente de IA</td>
+<td>Disponibilizar um assistente em <em>chat</em> cujo contexto inclui a nota ativa, com resposta exibida progressivamente (<em>streaming</em>).</td>
+<td>Essencial</td>
+</tr>
+<tr>
+<td>RF21</td>
+<td>Ações rápidas de IA</td>
+<td>Oferecer ações predefinidas de IA (resumir, expandir, corrigir, gerar diagrama, tabela e <em>flashcards</em>).</td>
+<td>Importante</td>
+</tr>
+<tr>
+<td>RF22</td>
+<td>Ação de IA no texto</td>
+<td>Aplicar transformações de IA (explicar, reescrever, traduzir) sobre um trecho selecionado no editor.</td>
+<td>Importante</td>
+</tr>
+<tr>
+<td>RF23</td>
+<td>Configurar IA</td>
+<td>Permitir a configuração de provedores, modelos e chaves de API para geração de texto e para <em>embeddings</em>.</td>
+<td>Essencial</td>
+</tr>
+<tr>
+<td>RF24</td>
+<td>Monitorar o vault</td>
+<td>Detectar em tempo real alterações feitas no <em>vault</em> por aplicações externas e atualizar a interface.</td>
+<td>Importante</td>
+</tr>
+<tr>
+<td>RF25</td>
+<td>Exportar para PDF</td>
+<td>Exportar a nota para PDF preservando fórmulas, diagramas e realce de código.</td>
+<td>Importante</td>
+</tr>
+<tr>
+<td>RF26</td>
+<td>Exportar apresentação</td>
+<td>Converter a nota em uma apresentação de slides navegável.</td>
+<td>Desejável</td>
+</tr>
+<tr>
+<td>RF27</td>
+<td>Exportar site</td>
+<td>Converter todo o <em>vault</em> em um site HTML estático navegável.</td>
+<td>Desejável</td>
+</tr>
+<tr>
+<td>RF28</td>
+<td>Preferências de interface</td>
+<td>Alternar entre tema claro e escuro e ajustar tipografia e comportamento do editor.</td>
+<td>Importante</td>
+</tr>
+</tbody>
+</table>
+<p>Fonte: elaborado pelo autor (2026).</p>
+<h3>3.1.2 Requisitos Não Funcionais</h3>
+<p>Os requisitos não funcionais frequentemente decorrem de atributos de qualidade
+desejados para o produto — como desempenho, confiabilidade, segurança e portabilidade —
+e, por serem restrições que se aplicam ao sistema como um todo, tendem a ser mais
+críticos do que os requisitos funcionais individuais, uma vez que sua violação pode
+inviabilizar o uso do software (PRESSMAN; MAXIM, 2021). O Quadro 2 apresenta os
+requisitos não funcionais (RNF) do VellumMD, associando cada um à respectiva categoria de
+qualidade.</p>
+<p><strong>Quadro 2 – Requisitos não funcionais do VellumMD</strong></p>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Categoria</th>
+<th>Requisito</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RNF01</td>
+<td>Privacidade</td>
+<td>As notas devem residir exclusivamente no sistema de arquivos local do usuário; nenhum conteúdo pode ser transmitido a servidores próprios do sistema, em conformidade com a Lei Geral de Proteção de Dados.</td>
+</tr>
+<tr>
+<td>RNF02</td>
+<td>Portabilidade de dados</td>
+<td>As notas devem ser armazenadas como arquivos Markdown puros, legíveis e editáveis por qualquer outro editor, sem formato proprietário ou banco de dados intermediário.</td>
+</tr>
+<tr>
+<td>RNF03</td>
+<td>Portabilidade de plataforma</td>
+<td>O sistema deve executar em Windows, macOS e Linux a partir de uma única base de código.</td>
+</tr>
+<tr>
+<td>RNF04</td>
+<td>Desempenho (edição)</td>
+<td>A digitação não deve apresentar latência perceptível, mesmo em notas extensas; o processamento de renderização deve limitar-se ao conteúdo visível.</td>
+</tr>
+<tr>
+<td>RNF05</td>
+<td>Desempenho (indexação)</td>
+<td>A indexação semântica deve minimizar as requisições à API, agrupando-as em lote, e respeitar os limites de taxa do provedor.</td>
+</tr>
+<tr>
+<td>RNF06</td>
+<td>Resiliência</td>
+<td>Falhas transitórias das APIs externas devem ser tratadas com novas tentativas; falhas sistêmicas devem interromper a operação com mensagem clara ao usuário.</td>
+</tr>
+<tr>
+<td>RNF07</td>
+<td>Operação offline</td>
+<td>As funções de edição, renderização, organização e busca léxica devem operar sem conexão com a internet; apenas os recursos de IA dependem de rede.</td>
+</tr>
+<tr>
+<td>RNF08</td>
+<td>Segurança</td>
+<td>O processo de interface não deve ter acesso direto ao sistema operacional; toda operação privilegiada deve passar por uma ponte de comunicação controlada, e a abertura de links externos deve ser restrita a protocolos seguros.</td>
+</tr>
+<tr>
+<td>RNF09</td>
+<td>Usabilidade</td>
+<td>A interface deve ser minimalista e centrada no texto, reduzindo a carga cognitiva imposta ao usuário durante a escrita.</td>
+</tr>
+<tr>
+<td>RNF10</td>
+<td>Manutenibilidade</td>
+<td>O código deve ser escrito com tipagem estática e organizado em módulos coesos e de baixo acoplamento.</td>
+</tr>
+<tr>
+<td>RNF11</td>
+<td>Extensibilidade</td>
+<td>O sistema deve suportar múltiplos provedores de IA, configuráveis pelo usuário sem alteração de código.</td>
+</tr>
+<tr>
+<td>RNF12</td>
+<td>Interoperabilidade</td>
+<td>A partir de uma única fonte Markdown, o sistema deve gerar saídas em múltiplos formatos (PDF, HTML e apresentação).</td>
+</tr>
+</tbody>
+</table>
+<p>Fonte: elaborado pelo autor (2026).</p>
+<h2>3.2 DIAGRAMA DE CASOS DE USO</h2>
+<p>O diagrama de casos de uso descreve as interações entre o sistema e os agentes externos a
+ele, capturando as funcionalidades sob a perspectiva de quem as utiliza; cada caso de uso
+representa uma unidade de comportamento significativo do ponto de vista de um ator, e não
+os detalhes internos de sua realização (FOWLER, 2005, p. 104). Os casos de uso são,
+assim, um instrumento eficaz para expressar os requisitos funcionais em termos de
+cenários de utilização (PRESSMAN; MAXIM, 2021).</p>
+<p>Foram identificados dois atores para o VellumMD. O <strong>Usuário</strong> é o ator principal, que
+interage diretamente com todas as funcionalidades do editor. O <strong>Serviço de IA Externo</strong> é
+um ator secundário — um sistema externo que participa dos casos de uso dependentes de
+inteligência artificial (busca semântica, assistente e ações de IA sobre o texto),
+fornecendo as respostas de geração de texto e de <em>embeddings</em>. A <strong>Figura 1</strong> apresenta o
+diagrama de casos de uso, o primeiro diagrama do capítulo.</p>
+<p><strong>Figura 1 – Diagrama de casos de uso do sistema VellumMD</strong></p>
+<pre><code class="language-plantuml">@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor "Usuário" as U
+actor "Serviço de IA\nExterno" as IA
+
+rectangle "Sistema VellumMD" {
+  usecase "Gerenciar Vault" as UC1
+  usecase "Criar e Editar Nota" as UC2
+  usecase "Visualizar Backlinks" as UC3
+  usecase "Configurar Sistema" as UC4
+  usecase "Buscar Notas por Significado" as UC5
+  usecase "Consultar Assistente de IA" as UC6
+  usecase "Aplicar Ação de IA no Texto" as UC7
+  usecase "Exportar Documento" as UC8
+}
+
+U --> UC1
+U --> UC2
+U --> UC3
+U --> UC4
+U --> UC5
+U --> UC6
+U --> UC7
+U --> UC8
+
+UC5 ..> IA : «usa»
+UC6 ..> IA : «usa»
+UC7 ..> IA : «usa»
+@enduml
+</code></pre>
+<p>Fonte: elaborado pelo autor (2026).</p>
+<h3>3.2.1 Casos de Uso Expandidos</h3>
+<p>O diagrama de casos de uso oferece uma visão geral das funcionalidades, porém não detalha
+o comportamento de cada interação. Esse detalhamento é fornecido pela descrição textual —
+o caso de uso expandido —, que registra o passo a passo da interação entre o ator e o
+sistema, incluindo pré-condições, o fluxo principal de eventos e os fluxos alternativos ou
+de exceção (PRESSMAN; MAXIM, 2021). Os Quadros 3 a 10 apresentam os oito casos de uso
+expandidos do VellumMD.</p>
+<p><strong>Quadro 3 – Caso de uso expandido UC01: Gerenciar Vault</strong></p>
+<table>
+<thead>
+<tr>
+<th>Campo</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Identificador</strong></td>
+<td>UC01</td>
+</tr>
+<tr>
+<td><strong>Nome</strong></td>
+<td>Gerenciar Vault</td>
+</tr>
+<tr>
+<td><strong>Ator principal</strong></td>
+<td>Usuário</td>
+</tr>
+<tr>
+<td><strong>Descrição</strong></td>
+<td>Permite selecionar a pasta de trabalho e realizar operações de criação, renomeação e exclusão de notas.</td>
+</tr>
+<tr>
+<td><strong>Pré-condições</strong></td>
+<td>O aplicativo está em execução.</td>
+</tr>
+<tr>
+<td><strong>Pós-condições</strong></td>
+<td>O <em>vault</em> selecionado é exibido na árvore de arquivos e as operações realizadas são refletidas no sistema de arquivos.</td>
+</tr>
+<tr>
+<td><strong>Fluxo principal</strong></td>
+<td>1. O usuário solicita a abertura de um <em>vault</em>. 2. O sistema exibe o diálogo de seleção de pasta. 3. O usuário escolhe uma pasta. 4. O sistema lê recursivamente os arquivos <code>.md</code> e exibe a árvore de navegação. 5. O usuário cria, renomeia ou exclui notas conforme necessário. 6. O sistema aplica cada operação ao sistema de arquivos e atualiza a árvore.</td>
+</tr>
+<tr>
+<td><strong>Fluxos alternativos</strong></td>
+<td>3a. O usuário cancela a seleção: o sistema mantém o estado anterior. 5a. Ao excluir, a nota é movida para a lixeira interna, permitindo restauração (RF05).</td>
+</tr>
+<tr>
+<td><strong>Requisitos associados</strong></td>
+<td>RF01, RF02, RF03, RF04, RF05</td>
+</tr>
+</tbody>
+</table>
+<p>Fonte: elaborado pelo autor (2026).</p>
+<p><strong>Quadro 4 – Caso de uso expandido UC02: Criar e Editar Nota</strong></p>
+<table>
+<thead>
+<tr>
+<th>Campo</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Identificador</strong></td>
+<td>UC02</td>
+</tr>
+<tr>
+<td><strong>Nome</strong></td>
+<td>Criar e Editar Nota</td>
+</tr>
+<tr>
+<td><strong>Ator principal</strong></td>
+<td>Usuário</td>
+</tr>
+<tr>
+<td><strong>Descrição</strong></td>
+<td>Permite redigir e formatar o conteúdo de uma nota, com salvamento automático e recursos de escrita técnica.</td>
+</tr>
+<tr>
+<td><strong>Pré-condições</strong></td>
+<td>Um <em>vault</em> está aberto.</td>
+</tr>
+<tr>
+<td><strong>Pós-condições</strong></td>
+<td>O conteúdo da nota é persistido no arquivo correspondente.</td>
+</tr>
+<tr>
+<td><strong>Fluxo principal</strong></td>
+<td>1. O usuário seleciona ou cria uma nota. 2. O sistema carrega o conteúdo no editor. 3. O usuário edita o texto em Markdown. 4. O sistema atualiza a pré-visualização e reinicia o temporizador de salvamento. 5. Após o intervalo de inatividade, o sistema grava a nota no disco.</td>
+</tr>
+<tr>
+<td><strong>Fluxos alternativos</strong></td>
+<td>3a. O usuário insere fórmula LaTeX, diagrama Mermaid ou <em>wikilink</em>: o sistema os reconhece e os renderiza (RF09, RF10, RF11). 5a. Se o usuário trocar de nota antes do intervalo, o sistema grava imediatamente as alterações pendentes. 5b. Em caso de falha de gravação, o sistema sinaliza o erro na barra de status.</td>
+</tr>
+<tr>
+<td><strong>Requisitos associados</strong></td>
+<td>RF06, RF07, RF08, RF09, RF10, RF11, RF13, RF14</td>
+</tr>
+</tbody>
+</table>
+<p>Fonte: elaborado pelo autor (2026).</p>
+<p><strong>Quadro 5 – Caso de uso expandido UC03: Visualizar Backlinks</strong></p>
+<table>
+<thead>
+<tr>
+<th>Campo</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Identificador</strong></td>
+<td>UC03</td>
+</tr>
+<tr>
+<td><strong>Nome</strong></td>
+<td>Visualizar Backlinks</td>
+</tr>
+<tr>
+<td><strong>Ator principal</strong></td>
+<td>Usuário</td>
+</tr>
+<tr>
+<td><strong>Descrição</strong></td>
+<td>Exibe as notas que referenciam a nota atualmente ativa, revelando as conexões reversas da base de conhecimento.</td>
+</tr>
+<tr>
+<td><strong>Pré-condições</strong></td>
+<td>Uma nota está aberta.</td>
+</tr>
+<tr>
+<td><strong>Pós-condições</strong></td>
+<td>A lista de notas referenciadoras é exibida no painel de <em>backlinks</em>.</td>
+</tr>
+<tr>
+<td><strong>Fluxo principal</strong></td>
+<td>1. O usuário abre uma nota. 2. O usuário acessa o painel de <em>backlinks</em>. 3. O sistema percorre o conteúdo das notas do <em>vault</em> em busca de <em>wikilinks</em> que apontem para a nota ativa. 4. O sistema exibe a lista de notas referenciadoras. 5. O usuário seleciona um item para navegar até a nota correspondente.</td>
+</tr>
+<tr>
+<td><strong>Fluxos alternativos</strong></td>
+<td>4a. Nenhuma nota referencia a nota ativa: o sistema informa a ausência de <em>backlinks</em>.</td>
+</tr>
+<tr>
+<td><strong>Requisitos associados</strong></td>
+<td>RF11, RF12</td>
+</tr>
+</tbody>
+</table>
+<p>Fonte: elaborado pelo autor (2026).</p>
+<p><strong>Quadro 6 – Caso de uso expandido UC04: Configurar Sistema</strong></p>
+<table>
+<thead>
+<tr>
+<th>Campo</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Identificador</strong></td>
+<td>UC04</td>
+</tr>
+<tr>
+<td><strong>Nome</strong></td>
+<td>Configurar Sistema</td>
+</tr>
+<tr>
+<td><strong>Ator principal</strong></td>
+<td>Usuário</td>
+</tr>
+<tr>
+<td><strong>Descrição</strong></td>
+<td>Permite ajustar provedores, modelos e chaves de IA, além de preferências de aparência e de comportamento do editor.</td>
+</tr>
+<tr>
+<td><strong>Pré-condições</strong></td>
+<td>O aplicativo está em execução.</td>
+</tr>
+<tr>
+<td><strong>Pós-condições</strong></td>
+<td>As configurações são persistidas e aplicadas às demais funcionalidades.</td>
+</tr>
+<tr>
+<td><strong>Fluxo principal</strong></td>
+<td>1. O usuário abre as configurações. 2. O usuário seleciona o provedor de IA, o modelo e informa a chave de API. 3. O usuário ajusta o modelo de <em>embedding</em>, o tema e o intervalo de salvamento. 4. O sistema valida e persiste as configurações.</td>
+</tr>
+<tr>
+<td><strong>Fluxos alternativos</strong></td>
+<td>2a. O usuário solicita a descoberta automática dos modelos disponíveis na conta: o sistema consulta a API e lista os modelos. 4a. Chave inválida: o sistema sinaliza o erro ao testar a conexão.</td>
+</tr>
+<tr>
+<td><strong>Requisitos associados</strong></td>
+<td>RF23, RF28</td>
+</tr>
+</tbody>
+</table>
+<p>Fonte: elaborado pelo autor (2026).</p>
+<p><strong>Quadro 7 – Caso de uso expandido UC05: Buscar Notas por Significado</strong></p>
+<table>
+<thead>
+<tr>
+<th>Campo</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Identificador</strong></td>
+<td>UC05</td>
+</tr>
+<tr>
+<td><strong>Nome</strong></td>
+<td>Buscar Notas por Significado</td>
+</tr>
+<tr>
+<td><strong>Atores</strong></td>
+<td>Usuário (principal); Serviço de IA Externo (secundário)</td>
+</tr>
+<tr>
+<td><strong>Descrição</strong></td>
+<td>Recupera notas por proximidade semântica com a consulta, e não apenas por correspondência exata de termos.</td>
+</tr>
+<tr>
+<td><strong>Pré-condições</strong></td>
+<td>O índice semântico está construído e há uma chave de API válida configurada.</td>
+</tr>
+<tr>
+<td><strong>Pós-condições</strong></td>
+<td>Os resultados mais relevantes são exibidos, ordenados por similaridade.</td>
+</tr>
+<tr>
+<td><strong>Fluxo principal</strong></td>
+<td>1. O usuário digita uma consulta na busca. 2. O sistema aguarda uma breve inatividade (<em>debounce</em>). 3. O sistema solicita ao Serviço de IA o <em>embedding</em> da consulta. 4. O sistema calcula a similaridade de cosseno entre a consulta e o índice do <em>vault</em>. 5. O sistema seleciona a passagem mais relevante de cada nota. 6. O sistema exibe os resultados combinados (léxicos e semânticos), ordenados por relevância.</td>
+</tr>
+<tr>
+<td><strong>Fluxos alternativos</strong></td>
+<td>3a. Falha na comunicação com a API: o sistema mantém apenas os resultados léxicos. 1a. O índice não está pronto: o sistema informa que a busca semântica está indisponível.</td>
+</tr>
+<tr>
+<td><strong>Requisitos associados</strong></td>
+<td>RF16, RF17, RF18</td>
+</tr>
+</tbody>
+</table>
+<p>Fonte: elaborado pelo autor (2026).</p>
+<p><strong>Quadro 8 – Caso de uso expandido UC06: Consultar Assistente de IA</strong></p>
+<table>
+<thead>
+<tr>
+<th>Campo</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Identificador</strong></td>
+<td>UC06</td>
+</tr>
+<tr>
+<td><strong>Nome</strong></td>
+<td>Consultar Assistente de IA</td>
+</tr>
+<tr>
+<td><strong>Atores</strong></td>
+<td>Usuário (principal); Serviço de IA Externo (secundário)</td>
+</tr>
+<tr>
+<td><strong>Descrição</strong></td>
+<td>Permite conversar com um assistente que conhece o conteúdo da nota ativa e responde de forma contextual.</td>
+</tr>
+<tr>
+<td><strong>Pré-condições</strong></td>
+<td>Há uma chave de API válida configurada.</td>
+</tr>
+<tr>
+<td><strong>Pós-condições</strong></td>
+<td>A resposta do assistente é exibida e pode ser inserida na nota.</td>
+</tr>
+<tr>
+<td><strong>Fluxo principal</strong></td>
+<td>1. O usuário envia uma mensagem ou aciona uma ação rápida. 2. O sistema monta o contexto incluindo o conteúdo da nota ativa. 3. O sistema envia a solicitação ao Serviço de IA. 4. O sistema exibe a resposta progressivamente, à medida que é recebida. 5. O usuário opta por inserir a resposta no editor.</td>
+</tr>
+<tr>
+<td><strong>Fluxos alternativos</strong></td>
+<td>3a. Chave ausente ou inválida: o sistema exibe orientação para configurá-la. 4a. Falha durante a geração: o sistema exibe a mensagem de erro correspondente.</td>
+</tr>
+<tr>
+<td><strong>Requisitos associados</strong></td>
+<td>RF20, RF21</td>
+</tr>
+</tbody>
+</table>
+<p>Fonte: elaborado pelo autor (2026).</p>
+<p><strong>Quadro 9 – Caso de uso expandido UC07: Aplicar Ação de IA no Texto</strong></p>
+<table>
+<thead>
+<tr>
+<th>Campo</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Identificador</strong></td>
+<td>UC07</td>
+</tr>
+<tr>
+<td><strong>Nome</strong></td>
+<td>Aplicar Ação de IA no Texto</td>
+</tr>
+<tr>
+<td><strong>Atores</strong></td>
+<td>Usuário (principal); Serviço de IA Externo (secundário)</td>
+</tr>
+<tr>
+<td><strong>Descrição</strong></td>
+<td>Aplica transformações de IA — explicar, reescrever ou traduzir — sobre um trecho selecionado diretamente no editor.</td>
+</tr>
+<tr>
+<td><strong>Pré-condições</strong></td>
+<td>Há um trecho de texto selecionado e uma chave de API válida.</td>
+</tr>
+<tr>
+<td><strong>Pós-condições</strong></td>
+<td>O resultado é exibido para o usuário, que pode substituir o trecho ou descartá-lo.</td>
+</tr>
+<tr>
+<td><strong>Fluxo principal</strong></td>
+<td>1. O usuário seleciona um trecho e aciona o menu de ações de IA. 2. O usuário escolhe a ação desejada. 3. O sistema envia o trecho e a instrução ao Serviço de IA. 4. O sistema exibe o resultado em um painel de pré-visualização. 5. O usuário aplica o resultado, substituindo o trecho original.</td>
+</tr>
+<tr>
+<td><strong>Fluxos alternativos</strong></td>
+<td>5a. O usuário cancela: o texto original é mantido. 3a. Falha na geração: o sistema informa o erro sem alterar o texto.</td>
+</tr>
+<tr>
+<td><strong>Requisitos associados</strong></td>
+<td>RF22</td>
+</tr>
+</tbody>
+</table>
+<p>Fonte: elaborado pelo autor (2026).</p>
+<p><strong>Quadro 10 – Caso de uso expandido UC08: Exportar Documento</strong></p>
+<table>
+<thead>
+<tr>
+<th>Campo</th>
+<th>Descrição</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Identificador</strong></td>
+<td>UC08</td>
+</tr>
+<tr>
+<td><strong>Nome</strong></td>
+<td>Exportar Documento</td>
+</tr>
+<tr>
+<td><strong>Ator principal</strong></td>
+<td>Usuário</td>
+</tr>
+<tr>
+<td><strong>Descrição</strong></td>
+<td>Converte a nota ou o <em>vault</em> em formatos de distribuição: PDF, apresentação de slides ou site estático.</td>
+</tr>
+<tr>
+<td><strong>Pré-condições</strong></td>
+<td>Uma nota está aberta (para PDF e slides) ou um <em>vault</em> está aberto (para site).</td>
+</tr>
+<tr>
+<td><strong>Pós-condições</strong></td>
+<td>O arquivo ou a pasta de saída é gravado no destino escolhido.</td>
+</tr>
+<tr>
+<td><strong>Fluxo principal</strong></td>
+<td>1. O usuário abre o diálogo de exportação e escolhe o formato. 2. O sistema converte o conteúdo Markdown, preservando fórmulas, diagramas e realce de código. 3. O sistema solicita o destino da gravação. 4. O sistema gera o artefato e confirma a conclusão.</td>
+</tr>
+<tr>
+<td><strong>Fluxos alternativos</strong></td>
+<td>2a. Exportação de site: o sistema processa todas as notas do <em>vault</em> e converte os <em>wikilinks</em> em hiperligações. 4a. Falha na gravação: o sistema exibe a mensagem de erro.</td>
+</tr>
+<tr>
+<td><strong>Requisitos associados</strong></td>
+<td>RF25, RF26, RF27</td>
+</tr>
+</tbody>
+</table>
+<p>Fonte: elaborado pelo autor (2026).</p>
+<h2>3.3 DIAGRAMA DE CLASSES</h2>
+<p>O diagrama de classes descreve a estrutura estática do sistema, apresentando os tipos de
+objetos do domínio, seus atributos e operações, bem como os relacionamentos entre eles; é
+o diagrama mais utilizado da UML e o que melhor expressa o vocabulário conceitual de um
+sistema orientado a objetos (FOWLER, 2005, p. 52). No contexto da modelagem de
+requisitos, a identificação das classes decorre da análise dos substantivos relevantes do
+domínio e das responsabilidades que o sistema deve assumir (PRESSMAN; MAXIM, 2021).</p>
+<p>A <strong>Figura 2</strong>, segundo diagrama do capítulo, apresenta o modelo conceitual do VellumMD em
+seis classes. Adotou-se a convenção de encapsulamento, na qual os atributos são privados
+(sinal <code>-</code>) e o acesso ao estado interno ocorre por meio de operações públicas (sinal
+<code>+</code>). A classe <strong>Vault</strong> compõe-se de zero ou mais objetos <strong>Nota</strong> (relação de
+composição, com multiplicidade <code>1</code> para <code>0..*</code>), refletindo que as notas só existem no
+contexto de um <em>vault</em> aberto. O <strong>IndiceSemantico</strong> depende do <strong>Vault</strong> para indexá-lo e
+do <strong>ServicoDeIA</strong> para gerar as representações vetoriais. O <strong>ServicoDeIA</strong> — que na
+implementação concentra tanto a geração de texto do assistente quanto a geração de
+<em>embeddings</em>, por utilizarem a mesma interface de provedores de IA — acessa o contexto da
+<strong>Nota</strong> ativa. O <strong>MotorDeExportacao</strong> renderiza as notas nos formatos de saída, e a
+<strong>ConfiguracaoDoSistema</strong> parametriza tanto o serviço de IA quanto o índice semântico.</p>
+<p><strong>Figura 2 – Diagrama de classes (modelo conceitual de domínio) do sistema VellumMD</strong></p>
+<pre><code class="language-plantuml">@startuml
+skinparam classAttributeIconSize 0
+
+class Vault {
+  -caminho : String
+  -notas : Lista&#x3C;Nota>
+  +abrirVault(caminho)
+  +listarNotas()
+  +criarNota(nome)
+  +salvarNota(nota)
+  +excluirNota(nota)
+  +restaurarUltimaExcluida()
+}
+
+class Nota {
+  -titulo : String
+  -conteudo : String
+  -tags : Lista&#x3C;String>
+  -caminhoArquivo : String
+  -mtime : Long
+  +extrairMetadados()
+  +extrairTags()
+  +obterBacklinks(vault)
+}
+
+class IndiceSemantico {
+  -embeddings : Mapa&#x3C;String, Vetor>
+  -passagens : Mapa&#x3C;String, Lista>
+  -cache : CacheEmbeddings
+  +construirIndice(vault)
+  +buscar(consulta, topK)
+  +obterMelhorPassagem(consulta, nota)
+  +sugerirConexoes(trecho)
+}
+
+class ServicoDeIA {
+  -provedor : String
+  -historico : Lista&#x3C;Mensagem>
+  -promptSistema : String
+  +chat(mensagens, aoReceberFragmento)
+  +aplicarAcao(texto, acao)
+  +gerarEmbedding(texto, tipo)
+}
+
+class MotorDeExportacao {
+  +exportarPDF(nota, formato)
+  +exportarApresentacao(nota)
+  +exportarSiteEstatico(vault)
+}
+
+class ConfiguracaoDoSistema {
+  -provedorIA : String
+  -modeloIA : String
+  -modeloEmbedding : String
+  -chaveAPI : String
+  -tema : String
+  -delayAutoSave : Inteiro
+  +obterConfiguracao()
+  +salvarConfiguracao()
+}
+
+Vault "1" *-- "0..*" Nota : compõe
+IndiceSemantico ..> Vault : indexa
+IndiceSemantico ..> ServicoDeIA : usa p/ gerar embeddings
+ServicoDeIA ..> Nota : acessa contexto
+MotorDeExportacao ..> Nota : renderiza
+MotorDeExportacao ..> Vault : exporta o vault (site)
+ConfiguracaoDoSistema ..> ServicoDeIA : configura
+ConfiguracaoDoSistema ..> IndiceSemantico : configura
+@enduml
+</code></pre>
+<p>Fonte: elaborado pelo autor (2026).</p>
+<h2>3.4 DIAGRAMA DE SEQUÊNCIA</h2>
+<p>Enquanto o diagrama de classes descreve a estrutura estática, o diagrama de sequência
+descreve o comportamento dinâmico: modela a colaboração entre objetos ao longo do tempo
+para a realização de um cenário, evidenciando a ordem cronológica das mensagens trocadas
+entre os participantes (FOWLER, 2005, p. 67). Optou-se por detalhar o fluxo de <strong>busca
+semântica</strong> como diagrama de sequência principal, por constituir o diferencial central do
+sistema e por exercitar a colaboração entre a interface, o índice, o serviço de IA e o
+ator externo. Um segundo diagrama, complementar, detalha o fluxo de edição com salvamento
+automático — o ciclo mais frequente de uso do editor.</p>
+<p>A <strong>Figura 3</strong>, terceiro diagrama do capítulo, apresenta o fluxo de busca semântica. Ao
+digitar a consulta, a interface aguarda uma breve inatividade antes de acionar o índice,
+evitando requisições a cada tecla. O índice solicita ao serviço de IA a vetorização da
+consulta (com o tipo de tarefa apropriado para recuperação) e, de posse do vetor, calcula
+localmente a similaridade de cosseno contra o índice em memória — ou seja, apenas a
+vetorização da consulta depende da rede; a comparação é inteiramente local.</p>
+<p><strong>Figura 3 – Diagrama de sequência: fluxo de busca semântica (principal)</strong></p>
+<pre><code class="language-plantuml">@startuml
+actor "Usuário" as U
+participant "Interface de\nBusca" as UI
+participant "Índice\nSemântico" as IDX
+participant "Serviço de IA" as AI
+participant "API de IA\n(externa)" as API
+
+U -> UI : digitar consulta
+UI -> UI : aguardar inatividade (debounce)
+UI -> IDX : buscar(consulta, topK)
+IDX -> AI : gerarEmbedding(consulta, RETRIEVAL_QUERY)
+AI -> API : embedContent(consulta)
+API --> AI : vetor de embedding (768 dim.)
+AI --> IDX : vetor da consulta
+IDX -> IDX : calcular similaridade de cosseno
+IDX -> IDX : selecionar melhor passagem por nota
+IDX --> UI : top-k resultados ordenados
+UI --> U : exibir resultados (léxicos + semânticos)
+@enduml
+</code></pre>
+<p>Fonte: elaborado pelo autor (2026).</p>
+<p>A <strong>Figura 4</strong>, quarto diagrama do capítulo, apresenta o fluxo complementar de edição e
+salvamento automático. Ao selecionar uma nota, o editor solicita a leitura do conteúdo ao
+gerenciador de <em>vault</em>; a cada alteração, um temporizador é reiniciado, e a gravação em
+disco ocorre somente após o intervalo de inatividade, evitando escritas redundantes a cada
+tecla digitada.</p>
+<p><strong>Figura 4 – Diagrama de sequência: edição com salvamento automático (complementar)</strong></p>
+<pre><code class="language-plantuml">@startuml
+actor "Usuário" as U
+participant "Editor" as ED
+participant "Gerenciador\nde Vault" as V
+participant "Sistema de\nArquivos" as FS
+
+U -> ED : selecionar nota
+ED -> V : lerNota(caminho)
+V -> FS : readFile(caminho)
+FS --> V : conteúdo
+V --> ED : carregar conteúdo no editor
+U -> ED : editar texto
+ED -> ED : reiniciar temporizador (debounce)
+ED -> V : salvarNota(caminho, conteúdo)
+V -> FS : writeFile(caminho, conteúdo)
+FS --> V : confirmação de gravação
+V --> ED : status "salvo"
+@enduml
+</code></pre>
+<p>Fonte: elaborado pelo autor (2026).</p>
+<h2>3.5 FERRAMENTAS E TECNOLOGIAS UTILIZADAS</h2>
+<p>O desenvolvimento do VellumMD apoiou-se em um conjunto de ferramentas e bibliotecas de
+código aberto, selecionadas para atender aos requisitos de portabilidade, desempenho e
+operação local. O Quadro 11 relaciona cada tecnologia à sua função geral — o papel que
+desempenha no ecossistema de desenvolvimento — e à sua função específica no projeto.</p>
+<p><strong>Quadro 11 – Ferramentas e tecnologias utilizadas no desenvolvimento do VellumMD</strong></p>
+<table>
+<thead>
+<tr>
+<th>Ferramenta / Tecnologia</th>
+<th>Função geral</th>
+<th>Função específica no VellumMD</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Electron</td>
+<td><em>Framework</em> para aplicações <em>desktop</em> multiplataforma com tecnologias web</td>
+<td>Empacota o sistema para Windows, macOS e Linux; provê o processo principal com acesso ao sistema de arquivos e à geração nativa de PDF</td>
+</tr>
+<tr>
+<td>Node.js</td>
+<td>Ambiente de execução de JavaScript fora do navegador</td>
+<td>Executa o processo principal do Electron: operações de arquivo, comunicação entre processos e exportação</td>
+</tr>
+<tr>
+<td>TypeScript</td>
+<td>Superconjunto tipado de JavaScript</td>
+<td>Linguagem de toda a base de código, garantindo verificação estática de tipos</td>
+</tr>
+<tr>
+<td>React</td>
+<td>Biblioteca para construção de interfaces reativas</td>
+<td>Estrutura a interface do processo de renderização (editor, pré-visualização, painéis e modais)</td>
+</tr>
+<tr>
+<td>Vite</td>
+<td>Empacotador e servidor de desenvolvimento</td>
+<td>Realiza a construção de produção e o desenvolvimento com recarga instantânea</td>
+</tr>
+<tr>
+<td>Zustand</td>
+<td>Biblioteca de gerenciamento de estado</td>
+<td>Mantém o estado global do <em>vault</em> e das configurações do usuário</td>
+</tr>
+<tr>
+<td>CodeMirror 6</td>
+<td>Componente de editor de código extensível</td>
+<td>Constitui o núcleo de edição Markdown, com realce de sintaxe, histórico e extensões próprias</td>
+</tr>
+<tr>
+<td>unified / remark / rehype</td>
+<td>Ecossistema de processamento de Markdown por árvore sintática</td>
+<td>Converte o Markdown em HTML na pré-visualização e nas exportações, com extensões para <em>wikilinks</em> e <em>callouts</em></td>
+</tr>
+<tr>
+<td>KaTeX</td>
+<td>Biblioteca de renderização de notação matemática</td>
+<td>Renderiza fórmulas LaTeX localmente, no editor e na pré-visualização</td>
+</tr>
+<tr>
+<td>Mermaid</td>
+<td>Biblioteca de geração de diagramas a partir de texto</td>
+<td>Renderiza diagramas descritos em sintaxe própria como imagens vetoriais</td>
+</tr>
+<tr>
+<td>Reveal.js</td>
+<td><em>Framework</em> de apresentações em HTML</td>
+<td>Estrutura as apresentações de slides geradas pela exportação</td>
+</tr>
+<tr>
+<td>API do Google (Gemini/Gemma)</td>
+<td>Serviço de modelos de linguagem e de <em>embeddings</em></td>
+<td>Gera os <em>embeddings</em> da busca semântica e as respostas do assistente</td>
+</tr>
+<tr>
+<td>APIs OpenAI, Anthropic e Groq</td>
+<td>Serviços de modelos de linguagem</td>
+<td>Provedores alternativos de IA, configuráveis pelo usuário</td>
+</tr>
+<tr>
+<td>electron-builder</td>
+<td>Ferramenta de empacotamento e distribuição de aplicações Electron</td>
+<td>Gera os instaladores do sistema para as plataformas-alvo</td>
+</tr>
+<tr>
+<td>Git</td>
+<td>Sistema de controle de versão distribuído</td>
+<td>Versiona o código-fonte e registra o histórico incremental do desenvolvimento</td>
+</tr>
+<tr>
+<td>PlantUML</td>
+<td>Ferramenta de geração de diagramas UML a partir de texto</td>
+<td>Produz os diagramas de modelagem apresentados neste capítulo</td>
+</tr>
+</tbody>
+</table>
+<p>Fonte: elaborado pelo autor (2026).</p>
+<h2>3.6 CONSIDERAÇÕES DO CAPÍTULO</h2>
+<p>Este capítulo especificou os requisitos funcionais e não funcionais do VellumMD e modelou
+sua estrutura e comportamento por meio de quatro diagramas UML — casos de uso, classes e
+dois diagramas de sequência —, complementados pelos casos de uso expandidos e pelo quadro
+de ferramentas. A modelagem manteve correspondência com a implementação real do sistema,
+tratando o diagrama de classes como um modelo conceitual de domínio, e não como
+transcrição literal do código. O conjunto de artefatos aqui apresentado fundamenta o
+desenvolvimento descrito nas seções seguintes e evidencia como as decisões de projeto
+atendem aos requisitos de privacidade, desempenho e operação local que orientam o
+trabalho.</p>
+</body></html>
