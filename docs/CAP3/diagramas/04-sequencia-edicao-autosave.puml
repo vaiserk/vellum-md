@@ -1,0 +1,32 @@
+@startuml sequencia-edicao-autosave
+' Figura 4 - Diagrama de Sequencia complementar: edicao com salvamento automatico
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam sequence {
+  ArrowColor #2C3E50
+  LifeLineBorderColor #1A3A5C
+  ParticipantBackgroundColor #D6EAF8
+  ParticipantBorderColor #1A3A5C
+  ActorBackgroundColor #EBF5FB
+}
+
+actor "Usuário" as U
+participant "Editor" as ED
+participant "Gerenciador\nde Vault" as V
+participant "Sistema de\nArquivos" as FS
+
+U -> ED : selecionar nota
+ED -> V : lerNota(caminho)
+V -> FS : readFile(caminho)
+FS --> V : conteúdo
+V --> ED : carregar conteúdo no editor
+
+U -> ED : editar texto
+ED -> ED : reiniciar temporizador (debounce)
+note right of ED : grava apenas após\no intervalo de inatividade
+ED -> V : salvarNota(caminho, conteúdo)
+V -> FS : writeFile(caminho, conteúdo)
+FS --> V : confirmação de gravação
+V --> ED : status "salvo"
+
+@enduml

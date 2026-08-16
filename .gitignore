@@ -7,3 +7,7 @@ release/
 .DS_Store
 *.log
 *.docx
+
+# Livros/PDFs de referencia (material protegido — nao versionar)
+*.pdf
+*.crdownload

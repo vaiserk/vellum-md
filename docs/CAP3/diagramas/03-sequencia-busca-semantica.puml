@@ -1,0 +1,31 @@
+@startuml sequencia-busca-semantica
+' Figura 3 - Diagrama de Sequencia PRINCIPAL: fluxo de busca semantica
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam sequence {
+  ArrowColor #2C3E50
+  LifeLineBorderColor #1A3A5C
+  ParticipantBackgroundColor #D6EAF8
+  ParticipantBorderColor #1A3A5C
+  ActorBackgroundColor #EBF5FB
+}
+
+actor "Usuário" as U
+participant "Interface de\nBusca" as UI
+participant "Índice\nSemântico" as IDX
+participant "Serviço de IA" as AI
+participant "API de IA\n(externa)" as API
+
+U -> UI : digitar consulta
+UI -> UI : aguardar inatividade (debounce)
+UI -> IDX : buscar(consulta, topK)
+IDX -> AI : gerarEmbedding(consulta, RETRIEVAL_QUERY)
+AI -> API : embedContent(consulta)
+API --> AI : vetor de embedding (768 dim.)
+AI --> IDX : vetor da consulta
+IDX -> IDX : calcular similaridade de cosseno\ncontra o índice em memória
+IDX -> IDX : selecionar melhor passagem por nota
+IDX --> UI : top-k resultados ordenados
+UI --> U : exibir resultados (léxicos + semânticos)
+
+@enduml

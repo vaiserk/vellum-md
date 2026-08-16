@@ -1,0 +1,80 @@
+@startuml classes
+' Figura 2 - Diagrama de Classes (modelo conceitual de dominio) do VellumMD
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam class {
+  BackgroundColor #D6EAF8
+  BorderColor #1A3A5C
+  ArrowColor #2C3E50
+}
+
+class Vault {
+  -caminho : String
+  -notas : Lista<Nota>
+  +abrirVault(caminho)
+  +listarNotas()
+  +criarNota(nome)
+  +salvarNota(nota)
+  +excluirNota(nota)
+  +restaurarUltimaExcluida()
+}
+
+class Nota {
+  -titulo : String
+  -conteudo : String
+  -tags : Lista<String>
+  -caminhoArquivo : String
+  -mtime : Long
+  +extrairMetadados()
+  +extrairTags()
+  +obterBacklinks(vault)
+}
+
+class IndiceSemantico {
+  -embeddings : Mapa<String, Vetor>
+  -passagens : Mapa<String, Lista>
+  -cache : CacheEmbeddings
+  +construirIndice(vault)
+  +buscar(consulta, topK)
+  +obterMelhorPassagem(consulta, nota)
+  +sugerirConexoes(trecho)
+}
+
+class ServicoDeIA {
+  -provedor : String
+  -historico : Lista<Mensagem>
+  -promptSistema : String
+  +chat(mensagens, aoReceberFragmento)
+  +aplicarAcao(texto, acao)
+  +gerarEmbedding(texto, tipo)
+}
+
+class MotorDeExportacao {
+  +exportarPDF(nota, formato)
+  +exportarApresentacao(nota)
+  +exportarSiteEstatico(vault)
+}
+
+class ConfiguracaoDoSistema {
+  -provedorIA : String
+  -modeloIA : String
+  -modeloEmbedding : String
+  -chaveAPI : String
+  -tema : String
+  -delayAutoSave : Inteiro
+  +obterConfiguracao()
+  +salvarConfiguracao()
+}
+
+' Relacionamentos
+Vault "1" *-- "0..*" Nota : compõe
+IndiceSemantico ..> Vault : indexa
+IndiceSemantico ..> ServicoDeIA : usa p/ gerar embeddings
+ServicoDeIA ..> Nota : acessa contexto
+MotorDeExportacao ..> Nota : renderiza
+MotorDeExportacao ..> Vault : exporta o vault (site)
+ConfiguracaoDoSistema ..> ServicoDeIA : configura
+ConfiguracaoDoSistema ..> IndiceSemantico : configura
+
+@enduml
