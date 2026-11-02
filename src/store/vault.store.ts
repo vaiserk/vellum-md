@@ -3,6 +3,30 @@ import { EmbeddingService, extractTags, splitIntoPassages, cleanMarkdown, EMBEDD
 import { useSettingsStore } from './settings.store';
 import { flattenFiles } from '../utils/files';
 
+// --- Tema -------------------------------------------------------------
+// Por padrão o app segue o tema do sistema operacional (Windows: Claro/Escuro).
+// Assim que o usuário escolhe um tema manualmente, essa escolha é gravada e
+// passa a prevalecer sobre o sistema — inclusive nas próximas aberturas.
+const THEME_KEY = 'vellum-theme';
+
+export function getSystemTheme(): 'dark' | 'light' {
+  try {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
+function getInitialTheme(): { theme: 'dark' | 'light'; themeSource: 'system' | 'user' } {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'dark' || saved === 'light') return { theme: saved, themeSource: 'user' };
+  } catch {
+    /* localStorage indisponível — cai no tema do sistema */
+  }
+  return { theme: getSystemTheme(), themeSource: 'system' };
+}
+
 export interface AIMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -28,6 +52,8 @@ interface VaultState {
   activeContent: string;
   editorView: any | null;
   theme: 'dark' | 'light';
+  /** 'system' enquanto o usuário não escolher um tema; 'user' depois disso. */
+  themeSource: 'system' | 'user';
   layoutMode: LayoutMode;
   saveStatus: SaveStatus;
   cursorPosition: { line: number; col: number };
@@ -65,6 +91,8 @@ interface VaultState {
   setActiveContent: (content: string) => void;
   setEditorView: (view: any | null) => void;
   setTheme: (theme: 'dark' | 'light') => void;
+  /** Aplica o tema do SO; ignorado se o usuário já escolheu um tema. */
+  applySystemTheme: (theme: 'dark' | 'light') => void;
   setLayoutMode: (mode: LayoutMode) => void;
   setSaveStatus: (status: SaveStatus) => void;
   setCursorPosition: (pos: { line: number; col: number }) => void;
@@ -91,7 +119,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   activeFile: null,
   activeContent: '',
   editorView: null,
-  theme: 'dark',
+  ...getInitialTheme(),
   layoutMode: 'split',
   saveStatus: 'idle',
   cursorPosition: { line: 1, col: 1 },
@@ -118,7 +146,11 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   setActiveFile: (path, content = '') => set({ activeFile: path, activeContent: content }),
   setActiveContent: (content) => set({ activeContent: content }),
   setEditorView: (view) => set({ editorView: view }),
-  setTheme: (theme) => set({ theme }),
+  setTheme: (theme) => {
+    try { localStorage.setItem(THEME_KEY, theme); } catch { /* ignora */ }
+    set({ theme, themeSource: 'user' });
+  },
+  applySystemTheme: (theme) => set((s) => (s.themeSource === 'system' ? { theme } : s)),
   setLayoutMode: (mode) => set({ layoutMode: mode }),
   setSaveStatus: (status) => set({ saveStatus: status }),
   setCursorPosition: (pos) => set({ cursorPosition: pos }),

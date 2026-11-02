@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Sun, Moon } from 'lucide-react';
 import { useVaultStore } from '../../store/vault.store';
 import { useSettingsStore } from '../../store/settings.store';
 
@@ -7,7 +8,7 @@ type Step = 0 | 1 | 2 | 3;
 export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState<Step>(0);
   const [apiKey, setApiKey] = useState('');
-  const { setVaultPath, setFiles } = useVaultStore();
+  const { setVaultPath, setFiles, theme, setTheme } = useVaultStore();
   const settings = useSettingsStore();
 
   const handleSelectVault = async () => {
@@ -48,6 +49,16 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
   return (
     <div className="onboarding-overlay">
       <div className="onboarding-card">
+        {/* Mesmo botão de tema da tela principal, para que o usuário possa
+            alternar claro/escuro já na configuração inicial. */}
+        <button
+          className="onboarding-theme-toggle"
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          title={theme === 'dark' ? 'Mudar para o modo claro' : 'Mudar para o modo escuro'}
+          aria-label={theme === 'dark' ? 'Mudar para o modo claro' : 'Mudar para o modo escuro'}
+        >
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
         {/* Step 0: Welcome */}
         {step === 0 && (
           <div className="onboarding-step">

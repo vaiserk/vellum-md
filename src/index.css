@@ -863,7 +863,25 @@ button.ai-insert-btn:hover { text-decoration: underline; opacity: 1; }
   justify-content: center;
   z-index: 2000;
 }
+.onboarding-theme-toggle {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 6px;
+  line-height: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.onboarding-theme-toggle:hover {
+  background: var(--bg-color);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
 .onboarding-card {
+  position: relative;
   width: 480px;
   max-width: 90vw;
   background: var(--editor-bg);

@@ -71,6 +71,16 @@ function App() {
     };
   }, [vaultPath]);
 
+  // Acompanha o tema do Windows em tempo real enquanto o usuário não escolher
+  // um tema manualmente (applySystemTheme ignora a mudança depois disso).
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (e: MediaQueryListEvent) =>
+      useVaultStore.getState().applySystemTheme(e.matches ? 'dark' : 'light');
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     document.documentElement.style.setProperty('--font-family', fontFamily === 'Inter' ? '"Inter", sans-serif' : fontFamily === 'Lora' ? '"Lora", serif' : fontFamily === 'JetBrains Mono' ? '"JetBrains Mono", monospace' : '"Roboto", sans-serif');
