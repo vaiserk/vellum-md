@@ -59,16 +59,40 @@ export function AIPanel({ onClose }: { onClose: () => void }) {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [aiMessages, streamingText]);
 
+  // Trecho selecionado no editor. Três das ações rápidas falam explicitamente
+  // da seleção ("Expanda o parágrafo selecionado", "Corrija... neste texto"),
+  // mas ela nunca era lida — a IA operava sempre sobre a nota inteira e
+  // parecia que selecionar não fazia efeito.
+  const getSelecao = (): string => {
+    const view = useVaultStore.getState().editorView;
+    if (!view) return '';
+    const sel = view.state.selection.main;
+    if (sel.empty) return '';
+    return view.state.doc.sliceString(sel.from, sel.to).trim();
+  };
+
+  // Teto de contexto enviado à IA. O valor anterior (4000) cortava um capítulo
+  // de TCC em ~1,5 página e o "Resumir" saía incompleto sem nenhum aviso.
+  const LIMITE_CONTEXTO = 24000;
+
   const getSystemPrompt = () => {
     // Lê a nota ativa no momento do envio (não via subscription — ver comentário acima)
     const { activeContent, activeFile } = useVaultStore.getState();
     const title = activeFile?.split(/[/\\]/).pop()?.replace('.md', '') || 'Sem título';
+    const truncada = activeContent.length > LIMITE_CONTEXTO;
+    const selecao = getSelecao();
     return `Você é um assistente de escrita especializado no VellumMD — um app de notas Markdown com recursos avançados de renderização.
 O usuário está editando: **${title}**
 
 <nota_atual>
-${activeContent.slice(0, 4000)}
-</nota_atual>
+${activeContent.slice(0, LIMITE_CONTEXTO)}
+</nota_atual>${truncada ? `
+<aviso>A nota foi truncada: você está vendo apenas os primeiros ${LIMITE_CONTEXTO} caracteres de ${activeContent.length}. Se a tarefa exigir a nota inteira, diga isso ao usuário em vez de responder parcialmente como se tivesse lido tudo.</aviso>` : ''}${selecao ? `
+
+<selecao>
+${selecao}
+</selecao>
+O usuário SELECIONOU o trecho acima. Quando a tarefa falar em "selecionado", "este texto" ou "este trecho", opere sobre <selecao>, usando <nota_atual> apenas como contexto.` : ''}
 
 ## Regras de resposta
 - Responda sempre em português, seja conciso e direto
@@ -159,7 +183,17 @@ graph TD
         setStreamingText(fullResponse);
       });
 
-      setAiMessages(prev => [...prev, { role: 'assistant', content: fullResponse }]);
+      // Resposta vazia acontece quando o provedor bloqueia por filtro de
+      // conteúdo ou estoura o limite de tokens. Sem esta checagem, surgia uma
+      // bolha em branco com botão "Inserir" — o usuário não sabia se tinha
+      // travado, falhado, ou se a IA não tinha nada a dizer; e "Inserir"
+      // colava duas linhas vazias na nota.
+      setAiMessages(prev => [...prev, {
+        role: 'assistant',
+        content: fullResponse.trim()
+          ? fullResponse
+          : '⚠️ A IA não retornou conteúdo. Pode ter sido bloqueio do filtro de conteúdo do provedor ou limite de tokens atingido. Tente reformular a pergunta.',
+      }]);
       setStreamingText('');
     } catch (err: any) {
       setAiMessages(prev => [...prev, { role: 'assistant', content: `❌ Erro: ${err.message}` }]);

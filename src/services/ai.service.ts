@@ -6,6 +6,41 @@ interface ChatMessage {
   content: string;
 }
 
+/**
+ * Converte uma resposta HTTP de erro numa mensagem que faça sentido para quem
+ * está usando o app. Antes, o corpo cru da API era jogado na bolha do chat:
+ * `API Error (401): {"error":{"message":"Incorrect API key provided: sk-..."`
+ * — difícil de ler e ainda vazava a chave na tela.
+ */
+export async function mensagemDeErroHttp(response: Response): Promise<string> {
+  let detalhe = '';
+  try {
+    const bruto = await response.text();
+    try {
+      const json = JSON.parse(bruto);
+      detalhe = json?.error?.message ?? json?.message ?? '';
+    } catch {
+      detalhe = bruto.slice(0, 200);
+    }
+  } catch {
+    /* corpo ilegível — segue só com o status */
+  }
+
+  const porStatus: Record<number, string> = {
+    400: 'Requisição inválida. Verifique o modelo escolhido em Configurações.',
+    401: 'Chave de API inválida. Confira a chave em Configurações.',
+    403: 'Acesso negado pela API. A chave pode não ter permissão para este modelo.',
+    404: 'Modelo não encontrado. Escolha outro modelo em Configurações.',
+    429: 'Limite de uso atingido. Aguarde alguns instantes e tente de novo.',
+    500: 'O provedor de IA está com problema interno. Tente novamente em instantes.',
+    503: 'O provedor de IA está indisponível no momento.',
+  };
+
+  const base = porStatus[response.status] ?? `Falha na chamada à IA (HTTP ${response.status}).`;
+  // O detalhe técnico vem depois, entre parênteses, para quem quiser investigar
+  return detalhe ? `${base} (${detalhe})` : base;
+}
+
 export class AIService {
   private static getHeaders(): Record<string, string> {
     const { apiKey, aiProvider } = useSettingsStore.getState();
@@ -63,8 +98,7 @@ export class AIService {
     });
 
     if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`API Error (${response.status}): ${err}`);
+      throw new Error(await mensagemDeErroHttp(response));
     }
 
     if (onChunk && response.body) {
