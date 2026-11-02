@@ -236,3 +236,59 @@ desabilitar a assinatura não era alternativa: custaria o ícone.
 
 `license` no `package.json` está vazio. Pelo Business Model Canvas o projeto é
 de código aberto, mas a escolha da licença é decisão do autor.
+
+---
+
+## 9. Segunda rodada — teste manual do usuário (02/11, tarde)
+
+Depois das correções da manhã, o aplicativo foi testado **manualmente, tela por
+tela**, pelo próprio autor. Foi a varredura do Dia 2 feita de verdade, com
+clique, e rendeu achados que nenhuma auditoria estática tinha pego.
+
+### Confirmado funcionando
+Busca semântica (retornou *Segundo Cérebro* 70% e *Carga Cognitiva* 68% para
+uma consulta sem nenhuma palavra em comum com as notas), backlinks, tags,
+assistente de IA, exportação para PDF e site, criação e exclusão de notas,
+lixeira com Desfazer, colapso de pastas.
+
+### Defeitos encontrados e corrigidos
+
+| # | Defeito | Causa real |
+|---|---|---|
+| 1 | 🔴 **Tela branca sem recuperação** ao clicar em `[texto](www.exemplo.com)` | Dois defeitos somados: o Preview só interceptava `http(s)://`, e a trava de navegação adicionada de manhã liberava **qualquer `file://`** — a janela navegava para `file:///.../www.exemplo.com`, falhava e morria |
+| 2 | Exportar slides falhava | `reveal.js` 6 declara `exports` e não publica `./dist/*` nem `./package.json`; a leitura agora sobe do entry principal até a raiz |
+| 3 | Código ilegível no modo claro | `Preview.tsx` importava `github-dark.css` estaticamente; import de CSS é global, então o tema escuro valia também no claro |
+| 4 | Imagem de URL externa só aparecia ao reabrir a nota | `closeBrackets` completa `![]()` enquanto se digita → `<img src="">` dispara `onError` → o componente marcava `broken` num booleano que **ficava preso**, porque o React mantém a instância enquanto só o `src` muda |
+| 5 | Tabela não renderizava no editor | Faltava a extensão; criada seguindo o padrão de mermaid/latex, com `StateField` |
+| 6 | 🔴 **5 botões da barra mortos** (código, LaTeX, tabela, link, imagem) | **Regressão introduzida na mesma manhã**: ao corrigir o negrito, um `return` para seleção vazia matou justamente os botões acionados com o cursor parado |
+| 7 | Tabela do editor estreita e bagunçada ao editar | Largura não batia com o preview; e o LaTeX continuava renderizando fórmulas dentro das linhas de tabela quando o widget saía |
+
+### Dois relatos que NÃO eram defeitos
+
+- **`- [ x]` não vira checkbox** e **`**texto **` não vira negrito**: é o
+  Markdown correto. O marcador de tarefa só aceita `[ ]` e `[x]`, e o
+  delimitador de fechamento não pode vir precedido de espaço. Mudar isso
+  quebraria a compatibilidade com Obsidian e GitHub — justamente o argumento de
+  formato aberto do trabalho.
+- **Mas havia um bug real embutido:** selecionar a palavra junto com o espaço
+  (o que o duplo clique faz) e apertar `Ctrl+B` gerava exatamente `**texto **`.
+  Os espaços das pontas agora ficam fora dos marcadores.
+
+### Funcionalidades que faltavam, implementadas na sequência
+
+- **Lixeira acessível a qualquer momento** (ícone na barra lateral). Antes, a
+  única forma de recuperar era o banner de Desfazer, que some em 10 s. O IPC
+  novo (`listTrash` / `restoreFromTrash`) corrigiu de quebra um defeito
+  conhecido: o Desfazer restaurava sempre o item **mais recente** da lixeira, e
+  não a nota que o banner oferecia.
+- **Mover nota entre pastas** (menu de contexto).
+- **Criar nota dentro de subpasta** (seletor no modal).
+
+### Lição de método
+
+Duas das correções da manhã geraram regressão (a trava de navegação e o
+`return` do negrito), e as duas só apareceram no **teste manual**. A auditoria
+estática achou 31 defeitos reais, mas nenhum destes dois: eram comportamentos
+que só existem quando alguém clica. Vale registrar na defesa que as duas formas
+de verificação — leitura de código e uso real — pegam classes diferentes de
+problema.

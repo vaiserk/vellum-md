@@ -1,6 +1,6 @@
 # Arquitetura Interativa — VellumMD
 
-Dois artefatos gerados a partir da análise do codebase (38 nós, 63 conexões, 10 fluxos).
+Dois artefatos gerados a partir da análise do codebase (42 nós, 67 conexões, 10 fluxos).
 
 > **Atualizado em 02/11/2026** após a revisão final. Entraram os nós
 > `ErrorBoundary`, `openNote` e `Testes (Vitest)`, e as descrições de `main`,

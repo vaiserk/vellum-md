@@ -32,7 +32,7 @@
       "Mermaid com securityLevel strict em todos os pipelines (loader compartilhado e os tres builders de export).",
       "ErrorBoundary em volta do app: excecao de renderizacao vira tela de recuperacao em vez de tela branca."
     ],
-    "tests": "46 testes (Vitest): logica pura em src/services e electron/handlers, mais testes de componente do ErrorBoundary em jsdom."
+    "tests": "70 testes (Vitest): logica pura, componentes (ErrorBoundary, TrashModal, FolderPicker) e a extensao de tabela montada numa EditorView real."
   },
   "nodes": [
     {
@@ -338,6 +338,38 @@
       "group": "util",
       "layer": 2,
       "desc": "46 testes: similaridade do cosseno, dimensoes de embedding e montagem de payload, escapeHtml, codificacao da lixeira e o ErrorBoundary em ambiente jsdom."
+    },
+    {
+      "id": "trash-modal",
+      "label": "TrashModal",
+      "file": "src/components/modals/TrashModal.tsx",
+      "group": "ui",
+      "layer": 0,
+      "desc": "Lixeira acessivel a qualquer momento: lista os itens de .vellum/trash com data de exclusao e restaura o item escolhido. Antes, a unica forma de recuperar uma nota era o banner de Desfazer, que some em 10 segundos."
+    },
+    {
+      "id": "folder-picker",
+      "label": "FolderPicker",
+      "file": "src/components/modals/FolderPicker.tsx",
+      "group": "ui",
+      "layer": 0,
+      "desc": "Seletor de pasta reutilizado por dois fluxos: mover nota entre pastas (menu de contexto da arvore) e escolher a pasta de destino ao criar nota. Exporta tambem os helpers de caminho (listarPastas, juntarCaminho)."
+    },
+    {
+      "id": "table-ext",
+      "label": "table.ext",
+      "file": "src/components/editor/extensions/table.ext.ts",
+      "group": "ui",
+      "layer": 1,
+      "desc": "Pre-visualizacao inline de tabelas GFM no editor, no mesmo padrao de latex.ext e mermaid.ext. Usa StateField (nunca ViewPlugin: decoracao replace que cruza linhas vinda de plugin derruba o renderer). A tabela sob o cursor volta a ser texto editavel."
+    },
+    {
+      "id": "hljs-theme",
+      "label": "hljs-theme",
+      "file": "src/utils/hljs-theme.ts",
+      "group": "util",
+      "layer": 2,
+      "desc": "Alterna o tema do realce de codigo conforme data-theme. Antes o github-dark.css era importado de forma estatica e, como import de CSS e global, o tema escuro valia tambem no modo claro."
     }
   ],
   "edges": [
@@ -718,6 +750,30 @@
       "target": "similarity",
       "kind": "call",
       "label": "verifica"
+    },
+    {
+      "source": "trash-modal",
+      "target": "preload",
+      "kind": "ipc",
+      "label": "listTrash/restoreFromTrash"
+    },
+    {
+      "source": "folder-picker",
+      "target": "preload",
+      "kind": "ipc",
+      "label": "renameFile"
+    },
+    {
+      "source": "table-ext",
+      "target": "editor",
+      "kind": "contains",
+      "label": "extensao"
+    },
+    {
+      "source": "hljs-theme",
+      "target": "preview",
+      "kind": "call",
+      "label": "tema do codigo"
     }
   ],
   "flows": [

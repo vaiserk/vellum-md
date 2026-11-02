@@ -1,6 +1,6 @@
 {
   "name": "vellum-md",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Editor de Markdown local-first com busca semântica e assistência por IA",
   "author": "Otavio Freitas dos Santos",
   "main": "dist-electron/main.js",
