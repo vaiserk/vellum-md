@@ -269,7 +269,7 @@ item de "verificação e validação" defensável na defesa.
 
 - [x] `npm run build` → instalador em `release/`
 - [x] **Instalar numa máquina limpa** (ou com perfil novo: `--user-data-dir`)
-- [ ] Percorrer o caminho feliz no app instalado: onboarding → vault → nota → busca → exportar
+- [ ] Percorrer o caminho feliz no app **instalado** → roteiro pronto em [`TESTE-EM-OUTRA-MAQUINA.md`](TESTE-EM-OUTRA-MAQUINA.md), a ser feito em outra máquina
 - [x] Conferir ícone, nome e versão do aplicativo
 
 ### Bloco 4 — Fechamento (30 min)
