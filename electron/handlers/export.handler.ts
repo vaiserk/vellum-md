@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow, dialog } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { pathToFileURL } from 'url';
 
 // ─── Assets locais (offline) ──────────────────────────────────────────────────
 // Lê arquivos das dependências de produção via require.resolve — funciona em
@@ -50,6 +51,23 @@ export function escapeHtml(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/**
+ * Sanitiza um título para uso como nome de arquivo. O Windows proíbe
+ * \ / : * ? " < > | e nomes terminados em ponto; sem isso o diálogo de
+ * salvamento recebe um defaultPath inválido.
+ */
+export function sanitizeFileName(name: string, fallback: string): string {
+  const clean = String(name ?? '')
+    .replace(/[\\/:*?"<>|]/g, '-')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\.+$/, '')
+    .trim();
+  return clean || fallback;
 }
 
 // Temas válidos do reveal.js — whitelist evita path traversal via nome de tema
@@ -127,11 +145,15 @@ const PDF_CSS = `
 // DETERMINÍSTICA quando fontes e diagramas terminaram de renderizar (substitui
 // a antiga espera fixa de 3,5s que era lenta para notas simples e insuficiente
 // para notas com muitos diagramas).
-function buildPdfHtml(bodyContent: string): string {
+// baseHref: URL file:// da pasta da nota. Sem ela, uma imagem com caminho
+// relativo (`![](imagens/fig1.png)`) seria procurada em os.tmpdir(), onde o
+// HTML temporário é gravado, e sairia quebrada no PDF.
+function buildPdfHtml(bodyContent: string, baseHref?: string): string {
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
+  ${baseHref ? `<base href="${escapeHtml(baseHref)}">` : ''}
   <style>${getKatexCssInline()}</style>
   <style>${getHljsCss(false)}</style>
   <style>${PDF_CSS}</style>
@@ -163,6 +185,8 @@ export function setupExportHandlers() {
     htmlContent: string;
     format: string;
     orientation: string;
+    title?: string;
+    notePath?: string;
     filePath?: string;
   }) => {
     let tmpPath: string | null = null;
@@ -172,7 +196,9 @@ export function setupExportHandlers() {
       if (!savePath) {
         const result = await dialog.showSaveDialog({
           title: 'Exportar PDF',
-          defaultPath: 'nota.pdf',
+          // Sugere o nome da nota (como já é feito nos slides). Com 'nota.pdf'
+          // fixo, exportar vários capítulos sobrescrevia o anterior.
+          defaultPath: `${sanitizeFileName(options.title || '', 'nota')}.pdf`,
           filters: [{ name: 'PDF', extensions: ['pdf'] }],
         });
         if (result.canceled || !result.filePath) return { success: false, error: 'Cancelado' };
@@ -188,7 +214,15 @@ export function setupExportHandlers() {
 
       // Arquivo temporário em vez de data: URL — com o mermaid inline o HTML
       // passa de 2 MB, acima do limite de data URLs do Chromium.
-      const fullHtml = buildPdfHtml(options.htmlContent);
+      // <base> aponta para a pasta da nota, para que imagens relativas
+      // resolvam a partir dela e não a partir do diretório temporário.
+      let baseHref: string | undefined;
+      if (options.notePath) {
+        try {
+          baseHref = pathToFileURL(path.dirname(options.notePath) + path.sep).href;
+        } catch { /* sem base: segue sem resolver os relativos */ }
+      }
+      const fullHtml = buildPdfHtml(options.htmlContent, baseHref);
       tmpPath = path.join(os.tmpdir(), `vellum-pdf-${Date.now()}.html`);
       fs.writeFileSync(tmpPath, fullHtml, 'utf-8');
       await win.loadFile(tmpPath);
@@ -235,7 +269,7 @@ export function setupExportHandlers() {
       if (!savePath) {
         const result = await dialog.showSaveDialog({
           title: 'Exportar Slides',
-          defaultPath: `${options.title || 'slides'}.html`,
+          defaultPath: `${sanitizeFileName(options.title || '', 'slides')}.html`,
           filters: [{ name: 'HTML', extensions: ['html'] }],
         });
         if (result.canceled || !result.filePath) return { success: false, error: 'Cancelado' };
@@ -332,7 +366,7 @@ export function setupExportHandlers() {
 
   // ─── Export Static Site ────────────────────────────────────────────────────
   ipcMain.handle('export:site', async (_, options: {
-    pages: Array<{ title: string; slug: string; html: string }>;
+    pages: Array<{ title: string; slug: string; html: string; dir?: string }>;
     vaultName: string;
     dirPath?: string;
   }) => {
@@ -397,6 +431,48 @@ export function setupExportHandlers() {
         @media (max-width: 768px) { .layout { grid-template-columns: 1fr; } nav { position: static; height: auto; } main { padding: 1.5rem; } }
       `;
 
+      // ─── Imagens locais referenciadas pelas notas ────────────────────────────
+      // Antes só os assets de KaTeX/hljs/mermaid eram copiados, então
+      // `![](imagens/fig1.png)` ficava quebrado no site. Cada imagem local é
+      // copiada para assets/img/ com nome único e o src é reescrito.
+      const imgDir = path.join(assetsDir, 'img');
+      const copiedImages = new Map<string, string>();   // caminho absoluto → nome no site
+      const usedImageNames = new Set<string>();
+
+      const rewriteLocalImages = (html: string, baseDir?: string): string => {
+        if (!baseDir) return html;
+        return html.replace(/(<img\b[^>]*?\bsrc=")([^"]+)(")/gi, (full, pre, src, post) => {
+          // Ignora URLs absolutas (http:, data:, file:), protocol-relative e raiz
+          if (/^(?:[a-z][a-z0-9+.-]*:|\/\/|\/|#)/i.test(src)) return full;
+          const cleanSrc = src.split(/[?#]/)[0];
+          let rel = cleanSrc;
+          try { rel = decodeURIComponent(cleanSrc); } catch { /* usa o valor cru */ }
+          const abs = path.resolve(baseDir, rel);
+          let name = copiedImages.get(abs);
+          if (!name) {
+            try {
+              if (!fs.statSync(abs).isFile()) return full;
+            } catch {
+              return full;   // imagem inexistente: mantém o src original
+            }
+            const ext = path.extname(abs);
+            const stem = sanitizeFileName(path.basename(abs, ext), 'img');
+            name = `${stem}${ext}`;
+            let n = 2;
+            while (usedImageNames.has(name.toLowerCase())) name = `${stem}-${n++}${ext}`;
+            try {
+              fs.mkdirSync(imgDir, { recursive: true });
+              fs.copyFileSync(abs, path.join(imgDir, name));
+            } catch {
+              return full;   // falha ao copiar: não reescreve
+            }
+            usedImageNames.add(name.toLowerCase());
+            copiedImages.set(abs, name);
+          }
+          return `${pre}assets/img/${encodeURIComponent(name)}${post}`;
+        });
+      };
+
       const vaultTitle = escapeHtml(options.vaultName || 'Notas');
       const navLinks = options.pages
         .map(p => `<li><a href="${p.slug}.html">${escapeHtml(p.title)}</a></li>`)
@@ -446,16 +522,18 @@ export function setupExportHandlers() {
 
       // Write individual pages
       for (const page of options.pages) {
-        const pageHtml = buildPageHtml(page);
+        const pageHtml = buildPageHtml({ ...page, html: rewriteLocalImages(page.html, page.dir) });
         fs.writeFileSync(path.join(outDir, `${page.slug}.html`), pageHtml, 'utf-8');
       }
 
-      // Write index.html (redirect or overview)
+      // Write index.html (capa com o índice das notas)
+      // Sem `meta refresh`: ele pulava direto para uma nota arbitrária e, ao
+      // voltar, redirecionava de novo — o botão Voltar ficava inutilizado.
       if (options.pages.length > 0) {
-        const firstSlug = options.pages[0].slug;
         const indexHtml = `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<meta http-equiv="refresh" content="0;url=${firstSlug}.html">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${vaultTitle}</title>
 <style>${SITE_CSS}</style>
 </head>
 <body>

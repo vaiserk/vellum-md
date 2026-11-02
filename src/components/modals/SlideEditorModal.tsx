@@ -124,6 +124,8 @@ interface SlideEditorModalProps {
   title: string;
   onClose: () => void;
   onExport: (htmlSlides: string[], theme: string, transition: string) => Promise<void>;
+  /** Reporta falhas da conversão Markdown → HTML para o modal pai. */
+  onError?: (msg: string) => void;
   exporting: boolean;
 }
 
@@ -133,6 +135,7 @@ export function SlideEditorModal({
   title,
   onClose,
   onExport,
+  onError,
   exporting,
 }: SlideEditorModalProps) {
   // Strip frontmatter from the working copy immediately — user sees clean content
@@ -140,7 +143,20 @@ export function SlideEditorModal({
   const [currentSlide, setCurrentSlide] = useState(0);
   const [theme, setTheme] = useState('black');
   const [transition, setTransition] = useState('slide');
+  // Conversão Markdown → HTML acontece antes do diálogo de salvamento e pode
+  // levar segundos (KaTeX em muitos slides): precisa de estado próprio.
+  const [converting, setConverting] = useState(false);
+  const [convertError, setConvertError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Houve edição manual do fatiamento? Usado para confirmar o descarte.
+  const isDirty = workingSource !== stripFrontmatter(initialContent);
+
+  // Fecha pedindo confirmação se há trabalho manual a perder
+  const requestClose = useCallback(() => {
+    if (isDirty && !window.confirm('Descartar as alterações do editor de slides?')) return;
+    onClose();
+  }, [isDirty, onClose]);
 
   const slides = splitSlides(workingSource);
   const totalSlides = slides.length;
@@ -157,12 +173,12 @@ export function SlideEditorModal({
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose();
+        requestClose();
       }
     };
     window.addEventListener('keydown', handler, true); // capture phase — runs before App's listener
     return () => window.removeEventListener('keydown', handler, true);
-  }, [onClose]);
+  }, [requestClose]);
 
   // Insert --- at cursor position in the textarea
   const insertSeparator = useCallback(() => {
@@ -181,18 +197,40 @@ export function SlideEditorModal({
   }, [workingSource]);
 
   const handleExport = async () => {
-    const htmlSlides: string[] = [];
-    for (const slide of slides) {
-      htmlSlides.push(await mdToHtml(slide));
+    // Sem try/catch, uma falha do pipeline (rehype-katex/highlight) virava
+    // rejeição não tratada no onClick: o botão não mudava e nada acontecia.
+    setConverting(true);
+    setConvertError(null);
+    try {
+      const htmlSlides: string[] = [];
+      for (let i = 0; i < slides.length; i++) {
+        try {
+          htmlSlides.push(await mdToHtml(slides[i]));
+        } catch (err: any) {
+          throw new Error(`Slide ${i + 1}: ${err?.message || 'falha ao converter o Markdown'}`);
+        }
+      }
+      await onExport(htmlSlides, theme, transition);
+    } catch (err: any) {
+      const msg = err?.message || 'Erro desconhecido ao exportar os slides.';
+      setConvertError(msg);
+      onError?.(msg);
+    } finally {
+      setConverting(false);
     }
-    await onExport(htmlSlides, theme, transition);
   };
 
   const prev = () => setCurrentSlide(i => Math.max(0, i - 1));
   const next = () => setCurrentSlide(i => Math.min(totalSlides - 1, i + 1));
 
   return (
-    <div className="slide-editor-overlay" onClick={onClose}>
+    // stopPropagation: este overlay é renderizado dentro do overlay do
+    // ExportModal; sem isso o clique no fundo fechava os dois modais e o
+    // fatiamento manual era descartado sem aviso.
+    <div
+      className="slide-editor-overlay"
+      onClick={e => { e.stopPropagation(); requestClose(); }}
+    >
       <div className="slide-editor-modal" onClick={e => e.stopPropagation()}>
 
         {/* ── Header ──────────────────────────────────────────────────────── */}
@@ -224,19 +262,34 @@ export function SlideEditorModal({
             </div>
             <button
               onClick={handleExport}
-              disabled={exporting || totalSlides === 0}
+              disabled={exporting || converting || totalSlides === 0}
               className="slide-export-btn"
             >
-              {exporting
-                ? <><Loader size={14} className="spin" /> Exportando...</>
-                : <><Download size={14} /> Exportar ({totalSlides} slides)</>
+              {converting
+                ? <><Loader size={14} className="spin" /> Convertendo slides...</>
+                : exporting
+                  ? <><Loader size={14} className="spin" /> Exportando...</>
+                  : <><Download size={14} /> Exportar ({totalSlides} slides)</>
               }
             </button>
-            <button className="slide-editor-close" onClick={onClose} title="Fechar (Esc)">
+            <button className="slide-editor-close" onClick={requestClose} title="Fechar (Esc)">
               <X size={18} />
             </button>
           </div>
         </div>
+
+        {/* Erro de conversão — o modal pai fica atrás, então mostra aqui também */}
+        {convertError && (
+          <div style={{
+            padding: '8px 16px',
+            fontSize: '12px',
+            background: 'rgba(248,81,73,0.1)',
+            color: '#f85149',
+            borderBottom: '1px solid rgba(248,81,73,0.3)',
+          }}>
+            ❌ {convertError}
+          </div>
+        )}
 
         {/* ── Body ────────────────────────────────────────────────────────── */}
         <div className="slide-editor-body">

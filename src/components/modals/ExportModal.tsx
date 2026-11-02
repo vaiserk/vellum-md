@@ -143,10 +143,15 @@ export function ExportModal({ onClose }: { onClose: () => void }) {
     setResult(null);
     try {
       const htmlContent = await mdToHtml(activeContent);
+      // O nome da nota vira o nome sugerido no diálogo de salvamento, e o
+      // caminho dela permite resolver imagens com caminho relativo.
+      const noteTitle = activeFile?.split(/[\\/]/).pop()?.replace(/\.md$/, '') || 'nota';
       const response = await window.electron.export.pdf({
         htmlContent,
         format: pdfFormat,
         orientation: pdfOrientation,
+        title: noteTitle,
+        notePath: activeFile || undefined,
       });
       setResult(response.success
         ? { ok: true, msg: `✅ PDF salvo em: ${response.path}` }
@@ -193,21 +198,36 @@ export function ExportModal({ onClose }: { onClose: () => void }) {
         return;
       }
 
-      // Build slug map so wikilinks resolve to correct page URLs
+      // Build slug map so wikilinks resolve to correct page URLs.
+      // Dedupe obrigatório: como os acentos são removidos, "Capítulo 1" e
+      // "Capitulo 1" geram o mesmo slug e uma página sobrescreveria a outra.
+      // Nome só com emoji ("📌") gera slug vazio → fallback "nota-<i>".
       const slugMap: Record<string, string> = {};
-      for (const f of mdFiles) {
-        slugMap[f.name.toLowerCase()] = toSlug(f.name);
-      }
+      const usedSlugs = new Set<string>();
+      const slugs = mdFiles.map((f, i) => {
+        const base = toSlug(f.name) || `nota-${i + 1}`;
+        let slug = base;
+        let n = 2;
+        while (usedSlugs.has(slug)) slug = `${base}-${n++}`;
+        usedSlugs.add(slug);
+        // Em caso de nomes equivalentes, o wikilink aponta para o primeiro
+        const key = f.name.toLowerCase();
+        if (!(key in slugMap)) slugMap[key] = slug;
+        return slug;
+      });
       const wikilinkPlugin = makeWikilinkPlugin(slugMap);
 
-      const pages: Array<{ title: string; slug: string; html: string }> = [];
-      for (const f of mdFiles) {
+      const pages: Array<{ title: string; slug: string; html: string; dir: string }> = [];
+      for (let i = 0; i < mdFiles.length; i++) {
+        const f = mdFiles[i];
         const content = await window.electron.fs.readFile(f.path);
         const html = await mdToHtml(content, wikilinkPlugin);
         pages.push({
           title: f.name,
-          slug: toSlug(f.name),
+          slug: slugs[i],
           html,
+          // pasta da nota — base para copiar as imagens relativas
+          dir: f.path.replace(/[\\/][^\\/]*$/, ''),
         });
       }
 
@@ -374,6 +394,7 @@ export function ExportModal({ onClose }: { onClose: () => void }) {
           title={activeFile.split(/[\\/]/).pop()?.replace(/\.md$/, '') || 'slides'}
           onClose={() => setSlideEditorOpen(false)}
           onExport={handleDoExportSlides}
+          onError={msg => setSlidesResult({ ok: false, msg: `❌ ${msg}` })}
           exporting={slidesExporting}
         />
       )}
