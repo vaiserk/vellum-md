@@ -1,5 +1,5 @@
-import { ViewPlugin, DecorationSet, EditorView, WidgetType, Decoration } from '@codemirror/view';
-import { RangeSetBuilder } from '@codemirror/state';
+import { DecorationSet, EditorView, WidgetType, Decoration } from '@codemirror/view';
+import { RangeSetBuilder, StateField, EditorState } from '@codemirror/state';
 import katex from 'katex';
 
 class InlineMathWidget extends WidgetType {
@@ -38,18 +38,19 @@ class BlockMathWidget extends WidgetType {
   ignoreEvent() { return false; }
 }
 
-export const latexInlinePreview = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet;
-    constructor(view: EditorView) { this.decorations = buildDecorations(view); }
-    update(update: any) {
-      if (update.docChanged || update.selectionSet || update.viewportChanged) {
-        this.decorations = buildDecorations(update.view);
-      }
-    }
+// StateField, e não ViewPlugin: uma fórmula em bloco ($$ ... $$) pode ocupar
+// várias linhas, e o CodeMirror não aceita decorações "replace" que cruzam
+// quebras de linha vindas de um ViewPlugin (RangeError que derruba o renderer).
+export const latexInlinePreview = StateField.define<DecorationSet>({
+  create(state) {
+    return buildDecorations(state);
   },
-  { decorations: v => v.decorations }
-);
+  update(deco, tr) {
+    if (!tr.docChanged && !tr.selection) return deco.map(tr.changes);
+    return buildDecorations(tr.state);
+  },
+  provide: f => EditorView.decorations.from(f),
+});
 
 interface DecoSpec {
   from: number;
@@ -57,13 +58,15 @@ interface DecoSpec {
   widget: WidgetType;
 }
 
-function buildDecorations(view: EditorView): DecorationSet {
+function buildDecorations(state: EditorState): DecorationSet {
   try {
-  const selection = view.state.selection.main;
+  const selection = state.selection.main;
   const specs: DecoSpec[] = [];
 
-  for (const { from: rangeFrom, to: rangeTo } of view.visibleRanges) {
-    const text = view.state.doc.sliceString(rangeFrom, rangeTo);
+  // Documento inteiro: um StateField não tem acesso ao viewport.
+  {
+    const rangeFrom = 0;
+    const text = state.doc.toString();
 
     // Collect block math ranges first (higher priority)
     const blockRanges: Array<[number, number]> = [];

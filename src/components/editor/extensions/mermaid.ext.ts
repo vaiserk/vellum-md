@@ -1,5 +1,5 @@
-import { ViewPlugin, DecorationSet, EditorView, WidgetType, Decoration } from '@codemirror/view';
-import { RangeSetBuilder } from '@codemirror/state';
+import { DecorationSet, EditorView, WidgetType, Decoration } from '@codemirror/view';
+import { RangeSetBuilder, StateField, EditorState } from '@codemirror/state';
 // Loader lazy compartilhado com o Preview — mesma instância e mesma fila de
 // renderização (o Mermaid é singleton; renders concorrentes se corrompem).
 import { enqueueMermaidRender } from '../../../utils/mermaid-loader';
@@ -68,38 +68,38 @@ class MermaidWidget extends WidgetType {
 // Regex to match ```mermaid...``` code fences
 const MERMAID_FENCE_RE = /^```mermaid\n([\s\S]*?)^```/gm;
 
-export const mermaidInlinePreview = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet;
-
-    constructor(view: EditorView) {
-      this.decorations = buildMermaidDecorations(view);
-    }
-
-    update(update: any) {
-      if (update.docChanged || update.selectionSet || update.viewportChanged) {
-        this.decorations = buildMermaidDecorations(update.view);
-      }
-    }
+// IMPORTANTE: precisa ser um StateField, e não um ViewPlugin.
+// Um bloco ```mermaid``` sempre atravessa quebras de linha, e o CodeMirror
+// proíbe que decorações do tipo "replace" que cruzam linhas venham de um
+// ViewPlugin — ele lança "RangeError: Decorations that replace line breaks
+// may not be specified via plugins", o que derrubava o renderer (tela branca)
+// ao abrir qualquer nota com diagrama.
+export const mermaidInlinePreview = StateField.define<DecorationSet>({
+  create(state) {
+    return buildMermaidDecorations(state);
   },
-  { decorations: v => v.decorations }
-);
+  update(deco, tr) {
+    if (!tr.docChanged && !tr.selection) return deco.map(tr.changes);
+    return buildMermaidDecorations(tr.state);
+  },
+  provide: f => EditorView.decorations.from(f),
+});
 
-function buildMermaidDecorations(view: EditorView): DecorationSet {
+function buildMermaidDecorations(state: EditorState): DecorationSet {
   try {
     const builder = new RangeSetBuilder<Decoration>();
-    const selection = view.state.selection.main;
+    const selection = state.selection.main;
     const matches: Array<{ from: number; to: number; code: string }> = [];
 
-    // Escaneia apenas os trechos visíveis do documento (visibleRanges) —
-    // a versão anterior fazia doc.toString() + regex no documento INTEIRO
-    // a cada tecla, o que causava lag em notas grandes.
-    for (const { from: rangeFrom, to: rangeTo } of view.visibleRanges) {
-      const text = view.state.doc.sliceString(rangeFrom, rangeTo);
+    // Um StateField não enxerga o viewport, então o documento é varrido
+    // inteiro. O custo é aceitável: só recalcula quando o texto muda ou a
+    // seleção se move, e o regex é barato perto de renderizar o diagrama.
+    {
+      const text = state.doc.toString();
       const re = new RegExp(MERMAID_FENCE_RE.source, 'gm');
       let m: RegExpExecArray | null;
       while ((m = re.exec(text)) !== null) {
-        const from = rangeFrom + m.index;
+        const from = m.index;
         const to = from + m[0].length;
         // Bloco sob o cursor/seleção permanece como código editável
         if (selection.from <= to && selection.to >= from) continue;
