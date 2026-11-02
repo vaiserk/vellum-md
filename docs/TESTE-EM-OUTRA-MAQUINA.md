@@ -54,6 +54,16 @@ Para prosseguir: **Mais informações → Executar assim mesmo**.
 
 Marque o que funcionar e anote o que não funcionar.
 
+### 0. O manual embutido
+- [ ] Pressionar **F1** → abre o *Manual do VellumMD* numa janela própria
+- [ ] Conferir o menu **Ajuda**: tem atalhos diretos para Atalhos de teclado,
+      Comandos de barra e Solução de problemas, e um **Sobre** com a versão
+- [ ] O manual tem que abrir mesmo **sem internet** (ele é autocontido)
+- [ ] Na seção *Atalhos de teclado*, testar o campo de filtro
+
+> Se alguém na empresa quiser entender o app, o manual responde sozinho — é
+> o lugar para onde apontar em vez de explicar na mão.
+
 ### 1. Primeira execução
 - [ ] Aparece o **assistente de configuração** (4 passos)
 - [ ] O tema segue o do Windows da máquina (claro ou escuro)
