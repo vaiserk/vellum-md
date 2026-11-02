@@ -75,11 +75,10 @@ class ModelRateLimiter {
 
   /** Registra requisição realizada */
   record(model: string): void {
+    // clean() já grava a janela no Map e devolve ESSA referência — um único
+    // push basta. A versão anterior empurrava duas vezes no mesmo array,
+    // consumindo o limite de requisições por minuto no dobro da velocidade.
     this.clean(model).push(Date.now());
-    // clean() retorna uma ref à janela atualizada, mas precisamos re-salvar
-    const updated = this.windows.get(model)!;
-    updated.push(Date.now());
-    this.windows.set(model, updated);
   }
 
   /**
