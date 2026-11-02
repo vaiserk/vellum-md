@@ -5,6 +5,7 @@ declare global {
     electron: {
       fs: {
         openVault: () => Promise<string | null>;
+        getLastVault: () => Promise<string | null>;
         readDir: (vaultPath: string) => Promise<any[]>;
         readFile: (filePath: string) => Promise<string>;
         writeFile: (filePath: string, content: string) => Promise<boolean>;

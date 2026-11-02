@@ -3,6 +3,9 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('electron', {
   fs: {
     openVault: () => ipcRenderer.invoke('fs:openVault'),
+    // Reabre o vault da sessao anterior. O caminho vem do processo principal,
+    // que e quem o guarda — o renderer nunca escolhe o diretorio.
+    getLastVault: () => ipcRenderer.invoke('fs:getLastVault'),
     readDir: (vaultPath: string) => ipcRenderer.invoke('fs:readDir', vaultPath),
     readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
     writeFile: (filePath: string, content: string) => ipcRenderer.invoke('fs:writeFile', filePath, content),

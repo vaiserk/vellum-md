@@ -41,6 +41,29 @@ function App() {
     return !localStorage.getItem('vellum-onboarding-done');
   });
 
+  // Reabre o último vault usado. O caminho é guardado e devolvido pelo processo
+  // principal — o renderer nunca escolhe o diretório, o que mantém válido o
+  // confinamento dos handlers de arquivo ao vault.
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      if (useVaultStore.getState().vaultPath) return;
+      try {
+        const ultimo = await window.electron.fs.getLastVault();
+        if (!ultimo || cancelado) return;
+        const arquivos = await window.electron.fs.readDir(ultimo);
+        if (cancelado) return;
+        const store = useVaultStore.getState();
+        store.setVaultPath(ultimo);
+        store.setFiles(arquivos);
+      } catch (e) {
+        // Vault movido, renomeado ou em unidade removida: segue na tela inicial
+        console.error('Nao foi possivel reabrir o ultimo vault:', e);
+      }
+    })();
+    return () => { cancelado = true; };
+  }, []);
+
   // Re-run indexing whenever files change. buildEmbeddingIndex já lê todos os
   // arquivos e monta tagIndex + fileContents — rodar loadTagsOnly junto lia o
   // vault inteiro DUAS vezes a cada mudança. loadTagsOnly é apenas o fallback
