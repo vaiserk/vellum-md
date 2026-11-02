@@ -863,6 +863,78 @@ button.ai-insert-btn:hover { text-decoration: underline; opacity: 1; }
   justify-content: center;
   z-index: 2000;
 }
+/* ── Tela de erro (ErrorBoundary) ─────────────────────────────────────────── */
+.errb-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-color, #ffffff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 9999;
+  overflow: auto;
+}
+.errb-card {
+  width: 560px;
+  max-width: 100%;
+  background: var(--editor-bg, #fafafa);
+  border: 1px solid var(--border-color, #d0d0d0);
+  border-radius: 12px;
+  padding: 36px;
+  text-align: center;
+  color: var(--text-primary, #202020);
+}
+.errb-icon { font-size: 40px; line-height: 1; margin-bottom: 12px; }
+.errb-card h1 { font-size: 22px; margin: 0 0 12px; }
+.errb-desc {
+  color: var(--text-secondary, #5a5a5a);
+  line-height: 1.6;
+  margin: 0 0 24px;
+}
+.errb-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.errb-btn-primary,
+.errb-btn {
+  padding: 10px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  border: 1px solid var(--border-color, #d0d0d0);
+  background: transparent;
+  color: var(--text-primary, #202020);
+}
+.errb-btn-primary {
+  background: var(--accent-color, #5b4fe0);
+  border-color: var(--accent-color, #5b4fe0);
+  color: #fff;
+  font-weight: 600;
+}
+.errb-details { text-align: left; }
+.errb-details summary {
+  cursor: pointer;
+  color: var(--text-secondary, #5a5a5a);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.errb-details pre {
+  max-height: 220px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--bg-color, #f0f0f0);
+  border: 1px solid var(--border-color, #d0d0d0);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .onboarding-theme-toggle {
   position: absolute;
   top: 12px;
