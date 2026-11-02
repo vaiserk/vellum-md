@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useVaultStore } from '../../store/vault.store';
 import { flattenFiles } from '../../utils/files';
+import { openNote } from '../../utils/openNote';
 
 const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
 
@@ -49,10 +50,7 @@ export function BacklinksPane() {
         </div>
       )}
       {backlinks.map(bl => (
-        <div key={bl.path} className="backlink-item" onClick={async () => {
-          const content = await window.electron.fs.readFile(bl.path);
-          useVaultStore.getState().setActiveFile(bl.path, content);
-        }}>
+        <div key={bl.path} className="backlink-item" onClick={() => openNote(bl.path)}>
           📄 {bl.name}
         </div>
       ))}

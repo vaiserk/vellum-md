@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useVaultStore } from '../../store/vault.store';
+import { toggleTypewriter } from '../editor/extensions/typewriter.ext';
 
 interface Command {
   id: string;
@@ -55,15 +56,20 @@ export function CommandPalette() {
       label: 'Restaurar Última Nota Excluída',
       category: 'Arquivo',
       action: async () => {
-        if (!vaultPath) return;
-        const success = await (window as any).electron.fs.restoreLastDeleted(vaultPath);
+        // close() ANTES do early return: sem vault, a paleta ficava aberta
+        // e o comando não fazia nada
+        close();
+        if (!vaultPath) {
+          useVaultStore.getState().openConfirm('Abra um vault antes de restaurar uma nota.');
+          return;
+        }
+        const success = await window.electron.fs.restoreLastDeleted(vaultPath);
         if (success) {
           const files = await window.electron.fs.readDir(vaultPath);
           setFiles(files);
         } else {
           useVaultStore.getState().openConfirm('Nenhuma nota encontrada na lixeira.');
         }
-        close();
       }
     },
     // Editor
@@ -80,8 +86,14 @@ export function CommandPalette() {
       category: 'Editor',
       shortcut: 'Ctrl+Shift+T',
       action: () => {
-        window.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, shiftKey: true, key: 'T' }));
+        // Antes despachava um KeyboardEvent em `window`, mas Ctrl+Shift+T só é
+        // tratado pelo keymap do CodeMirror (ligado ao contentDOM) — o evento
+        // nunca descia até lá e o comando era um no-op.
         close();
+        if (!editorView) return;
+        toggleTypewriter(editorView);
+        const store = useVaultStore.getState();
+        store.setTypewriterMode(!store.typewriterMode);
       }
     },
     {

@@ -8,6 +8,7 @@ import { Sun, Moon, FilePlus, Settings } from 'lucide-react';
 import { EmbeddingService } from '../../services/embedding.service';
 import { topKSimilar, cosineSimilarity } from '../../services/similarity';
 import { flattenFiles } from '../../utils/files';
+import { openNote } from '../../utils/openNote';
 
 type SidebarTab = 'files' | 'search' | 'tags' | 'backlinks';
 
@@ -33,14 +34,15 @@ export function Sidebar() {
   // antes, cada tecla digitada no editor re-renderizava a Sidebar inteira,
   // recomputando flattenFiles + busca léxica sobre todo o vault.
   const {
-    vaultPath, setVaultPath, setFiles, files, theme, setTheme, setActiveFile,
-    embeddingIndex, passageIndex, embeddingStatus, indexingProgress, tagIndex, fileContents, loadTagsOnly,
+    vaultPath, setVaultPath, setFiles, files, theme, setTheme,
+    embeddingIndex, passageIndex, embeddingStatus, embeddingError, indexingProgress, tagIndex, fileContents, loadTagsOnly,
     setNewNoteModalOpen,
   } = useVaultStore(useShallow(s => ({
     vaultPath: s.vaultPath, setVaultPath: s.setVaultPath, setFiles: s.setFiles,
-    files: s.files, theme: s.theme, setTheme: s.setTheme, setActiveFile: s.setActiveFile,
+    files: s.files, theme: s.theme, setTheme: s.setTheme,
     embeddingIndex: s.embeddingIndex, passageIndex: s.passageIndex,
-    embeddingStatus: s.embeddingStatus, indexingProgress: s.indexingProgress,
+    embeddingStatus: s.embeddingStatus, embeddingError: s.embeddingError,
+    indexingProgress: s.indexingProgress,
     tagIndex: s.tagIndex, fileContents: s.fileContents, loadTagsOnly: s.loadTagsOnly,
     setNewNoteModalOpen: s.setNewNoteModalOpen,
   })));
@@ -150,15 +152,11 @@ export function Sidebar() {
     };
   }, [searchQuery, embeddingStatus, embeddingIndex]);
 
-  const handleFileClick = async (file: FileNode) => {
-    const content = await window.electron.fs.readFile(file.path);
-    setActiveFile(file.path, content);
-  };
+  // Abas Tags e Busca: `openNote` trata imagem (a busca léxica casa pelo nome,
+  // então .png aparece nos resultados) e arquivo inexistente (clique morto)
+  const handleFileClick = (file: FileNode) => openNote(file.path, file.name);
 
-  const handleResultClick = async (path: string) => {
-    const content = await window.electron.fs.readFile(path);
-    setActiveFile(path, content);
-  };
+  const handleResultClick = (path: string) => openNote(path);
 
   // Merge lexical + semantic into a single ranked list (lexical has priority; duplicates skipped)
   const unifiedResults: UnifiedResult[] = useMemo(() => {
@@ -301,7 +299,9 @@ export function Sidebar() {
                           <mark className="search-highlight">{result.snippet.slice(result.matchIdx, result.matchIdx + result.matchLen)}</mark>
                           {result.snippet.slice(result.matchIdx + result.matchLen)}
                         </>
-                      : result.snippet
+                      : result.snippet.length > 160
+                        ? `${result.snippet.slice(0, 160)}…`
+                        : result.snippet
                     }
                   </div>
                 )}
@@ -312,7 +312,15 @@ export function Sidebar() {
               <div style={{ padding: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>Nenhum resultado</div>
             )}
 
-            {embeddingStatus !== 'ready' && embeddingStatus !== 'indexing' && (
+            {/* embeddingStatus 'error' tem um motivo real em embeddingError —
+                antes a Sidebar dizia sempre "configure uma chave", mesmo
+                quando a causa era outra (rede, cota, modelo inválido…) */}
+            {embeddingStatus === 'error' && (
+              <div style={{ padding: '8px', fontSize: '11px', color: 'var(--text-secondary)', borderTop: '1px solid var(--border-color)', marginTop: '4px' }}>
+                Busca semântica inativa — {embeddingError || 'configure uma chave de embedding em Configurações.'}
+              </div>
+            )}
+            {embeddingStatus !== 'ready' && embeddingStatus !== 'indexing' && embeddingStatus !== 'error' && (
               <div style={{ padding: '8px', fontSize: '11px', color: 'var(--text-secondary)', borderTop: '1px solid var(--border-color)', marginTop: '4px' }}>
                 Busca semântica inativa — configure uma chave de embedding em Configurações.
               </div>

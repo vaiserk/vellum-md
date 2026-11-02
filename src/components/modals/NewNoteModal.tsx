@@ -5,6 +5,11 @@ import { useSettingsStore } from '../../store/settings.store';
 import { AIService } from '../../services/ai.service';
 import { flattenFiles } from '../../utils/files';
 
+// Caracteres proibidos em nome de arquivo no Windows. Sem esta validacao,
+// "Cap 2: Metodologia" fazia o processo principal lancar e a rejeicao nao
+// tratada deixava o modal aberto sem mensagem nenhuma.
+const INVALID_NAME_RE = /[\\/:*?"<>|]/;
+
 export function NewNoteModal() {
   // useShallow: o modal fica sempre montado no App — não deve re-renderizar a cada tecla
   const { vaultPath, files, tagIndex, setFiles, setActiveFile, newNoteModalOpen, setNewNoteModalOpen } = useVaultStore(
@@ -21,12 +26,17 @@ export function NewNoteModal() {
   const [error, setError] = useState('');
   const [generating, setGenerating] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
+  // Guard de geracao: se o usuario fechar o modal durante a geracao por IA,
+  // o `await` continuava e a nota era criada e aberta por cima da que ele
+  // estava editando. Qualquer abertura/fechamento invalida a criacao em voo.
+  const createGenRef = useRef(0);
 
   const allFiles = useMemo(() => flattenFiles(files), [files]);
   const allTags = useMemo(() => Array.from(new Set([...tagIndex.values()].flat())).sort(), [tagIndex]);
   const aiAvailable = !!apiKey;
 
   useEffect(() => {
+    createGenRef.current++;
     if (newNoteModalOpen) {
       setNoteName('Nova Nota');
       setAiPrompt('');
@@ -44,9 +54,18 @@ export function NewNoteModal() {
   const toFileName = (name: string) =>
     name.trim().endsWith('.md') ? name.trim() : `${name.trim()}.md`;
 
+  // .normalize('NFC'): "Metodologia" digitado com acento composto (NFD) nao
+  // batia com o nome vindo do disco (NFC) e a duplicata passava.
   const isDuplicate = (name: string) => {
-    const fileName = toFileName(name);
-    return allFiles.some(f => f.name.toLowerCase() === fileName.toLowerCase());
+    const fileName = toFileName(name).normalize('NFC').toLowerCase();
+    return allFiles.some(f => f.name.normalize('NFC').toLowerCase() === fileName);
+  };
+
+  // Fechar o modal e proibido enquanto a IA gera (o overlay nao tinha guarda,
+  // so os botoes tinham `disabled`)
+  const handleClose = () => {
+    if (generating) return;
+    setNewNoteModalOpen(false);
   };
 
   const handleNameChange = (val: string) => {
@@ -95,9 +114,15 @@ aliases: []
     if (!vaultPath) return;
     const name = noteName.trim();
     if (!name) { setError('O nome da nota não pode estar vazio.'); return; }
+    const illegal = name.match(INVALID_NAME_RE);
+    if (illegal) {
+      setError(`O nome não pode conter \\ / : * ? " < > |  (encontrado: "${illegal[0]}").`);
+      return;
+    }
     if (isDuplicate(name)) { setError(`Já existe uma nota chamada "${toFileName(name)}".`); return; }
 
     const filePath = `${vaultPath}/${toFileName(name)}`;
+    const generation = ++createGenRef.current;
     let content: string;
 
     if (useAI && aiPrompt.trim()) {
@@ -114,7 +139,27 @@ aliases: []
       content = buildDefaultFrontmatter(name);
     }
 
-    await window.electron.fs.writeFile(filePath, content);
+    // O usuário desistiu enquanto a IA gerava — não cria nem abre nada
+    if (generation !== createGenRef.current) return;
+
+    try {
+      // fs.createFile tem a guarda `if (fs.existsSync) return false` no
+      // processo principal — é a única proteção real contra sobrescrever uma
+      // nota existente. isDuplicate() compara contra a árvore em memória,
+      // que fica até 1,5 s desatualizada (debounce do watcher).
+      // Uma única escrita atômica: createFile só grava se o arquivo ainda não
+      // existir, e agora recebe o conteúdo real — sem a janela em que a nota
+      // existia vazia, com frontmatter errado.
+      const created = await window.electron.fs.createFile(filePath, content);
+      if (!created) {
+        setError(`Já existe uma nota chamada "${toFileName(name)}".`);
+        return;
+      }
+    } catch (e: any) {
+      setError(`Não foi possível criar a nota: ${e?.message ?? e}`);
+      return;
+    }
+
     const updatedFiles = await window.electron.fs.readDir(vaultPath);
     setFiles(updatedFiles);
     setActiveFile(filePath, content);
@@ -122,7 +167,7 @@ aliases: []
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') { e.preventDefault(); setNewNoteModalOpen(false); }
+    if (e.key === 'Escape') { e.preventDefault(); handleClose(); }
     if (e.key === 'Enter' && !e.shiftKey && e.target === nameRef.current) {
       e.preventDefault();
       handleCreate(false);
@@ -130,7 +175,7 @@ aliases: []
   };
 
   return (
-    <div className="command-palette-overlay" onClick={() => setNewNoteModalOpen(false)}>
+    <div className="command-palette-overlay" onClick={handleClose}>
       <div
         className="settings-modal"
         style={{ width: '480px', padding: '24px' }}
@@ -211,7 +256,7 @@ aliases: []
         {/* Actions */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}>
           <button
-            onClick={() => setNewNoteModalOpen(false)}
+            onClick={handleClose}
             style={{ background: 'var(--border-color)', color: 'var(--text-primary)' }}
             disabled={generating}
           >
