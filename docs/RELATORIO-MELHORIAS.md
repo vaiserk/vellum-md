@@ -7,6 +7,17 @@
 
 ---
 
+> ## ✅ Situação em 02/11/2026
+>
+> Este relatório é de **setembro/2026**. Na revisão final de 02/11 foram
+> resolvidos: os **2 achados críticos** (#1 IPC sem confinamento, #2 Mermaid
+> `securityLevel`), e os altos **#3** (zero testes — hoje há 41), **#4**
+> (trava de navegação) e **#9** (comandos falsos na paleta).
+>
+> Os achados marcados **✅ RESOLVIDO** abaixo foram corrigidos; os demais
+> continuam válidos. O registro completo da revisão, incluindo 31 achados
+> **novos** não listados aqui, está em [`ACHADOS-REVISAO.md`](ACHADOS-REVISAO.md).
+
 ## 1. Metodologia
 
 - **Fan-out:** 9 dimensões analisadas simultaneamente — Electron & Segurança, Estado & Fluxo, Embeddings & Busca, Serviços de IA, Editor & Extensões, Preview & Renderização, UX/UI & Acessibilidade, Build/Deps/TCC e uma passada de regressão sobre as mudanças de Julho.
@@ -67,7 +78,7 @@ Ordenados por severidade e, dentro dela, por área. Cada item traz arquivos (com
 
 ### 🔴 Crítico (2)
 
-#### 1. IPC de arquivos sem confinamento ao vault (renderer pode ler/escrever qualquer arquivo do disco)
+#### 1. IPC de arquivos sem confinamento ao vault (renderer pode ler/escrever qualquer arquivo do disco)  ✅ **RESOLVIDO (02/11)**
 `Electron & Segurança` · veredito **CONFIRMADO** · esforço **medio** · categoria *seguranca*
 
 **Arquivos:** `electron/handlers/fs.handler.ts:50-64`, `electron/handlers/fs.handler.ts:66-74`, `electron/handlers/fs.handler.ts:81-100`, `electron/preload.ts:7-11`
@@ -80,7 +91,7 @@ Ordenados por severidade e, dentro dela, por área. Cada item traz arquivos (com
 
 > ⚖️ *Ressalva do verificador:* Ajuste menor na cadeia de exploracao: o pipeline nao inclui rehype-raw, entao HTML bruto embutido numa nota Markdown nao e necessariamente re-parseado/executado pelo rehype-react — o vetor de XSS "nota maliciosa injeta HTML" e menos direto do que o texto sugere (o dangerouslySetInnerHTML da l.59 recebe SVG gerado pelo proprio Mermaid). Isso nao enfraquece o achado central: a ausencia de confinamento de path e real e vale como defesa em profundidade contra qualquer XSS/bug no renderer, independentemente do vetor exato. A severidade critica permanece defensavel por ser um app local-first, ressalvando que a exploracao e contingente a execucao de JS no renderer (fato que o proprio achado reconhece).
 
-#### 2. Mermaid com securityLevel 'loose' permite XSS via conteudo de nota (preview e exports)
+#### 2. Mermaid com securityLevel 'loose' permite XSS via conteudo de nota (preview e exports)  ✅ **RESOLVIDO (02/11)**
 `Preview & Renderização` · veredito **CONFIRMADO** · esforço **medio** · categoria *seguranca*
 
 **Arquivos:** `src/utils/mermaid-loader.ts:26`, `src/utils/mermaid-loader.ts:32`, `src/components/preview/Preview.tsx:59`, `electron/handlers/export.handler.ts:143`, `electron/handlers/export.handler.ts:295`, `electron/handlers/export.handler.ts:430`
@@ -93,7 +104,7 @@ Ordenados por severidade e, dentro dela, por área. Cada item traz arquivos (com
 
 ### 🟠 Alto (9)
 
-#### 3. Ausencia total de testes automatizados em 39 arquivos-fonte
+#### 3. Ausencia total de testes automatizados em 39 arquivos-fonte  ✅ **RESOLVIDO (02/11)**
 `Build / Dependências / TCC` · veredito **CONFIRMADO** · esforço **medio** · categoria *tcc*
 
 **Arquivos:** `package.json:72-82`, `src/services/embedding.service.ts`, `src/services/similarity.ts`, `electron/handlers/export.handler.ts`
@@ -104,7 +115,7 @@ Ordenados por severidade e, dentro dela, por área. Cada item traz arquivos (com
 
 **Impacto.** Protege refactors futuros contra regressao silenciosa (ex.: a troca 3072->768 dims quebraria a busca sem alarme) e sustenta a secao de validacao exigida academicamente.
 
-#### 4. BrowserWindow sem trava de navegacao/janela: ponte window.electron pode vazar para origem remota
+#### 4. BrowserWindow sem trava de navegacao/janela: ponte window.electron pode vazar para origem remota  ✅ **RESOLVIDO (02/11)**
 `Electron & Segurança` · veredito **CONFIRMADO** · esforço **baixo** · categoria *seguranca*
 
 **Arquivos:** `electron/main.ts:9-30`, `electron/preload.ts:3-32`, `src/components/preview/Preview.tsx:284-296`
@@ -165,7 +176,7 @@ Ordenados por severidade e, dentro dela, por área. Cada item traz arquivos (com
 
 > ⚖️ *Ressalva do verificador:* Duas imprecisoes menores que nao mudam o veredito: (1) remarkWikilinks NAO e copia literal entre os arquivos — Preview.tsx:120 gera <span class="wikilink" data-note> para navegacao interna, enquanto ExportModal.tsx:47 (makeWikilinkPlugin) gera <a href="slug.html"> via slugMap; sao variantes paralelas, nao copy-paste. Apenas remarkCallouts e efetivamente duplicado quase identico. (2) O impacto do remarkStripFrontmatter ausente no export e mais fraco do que sugerido: remark-rehype descarta nos yaml/toml sem handler por padrao, entao a falta do strip provavelmente nao vaza frontmatter visivel no export (diferente do impacto real de remarkBreaks, esse sim ausente e divergente).
 
-#### 9. Comandos 'falsos' na paleta: Negrito, Itálico e Salvar Manualmente só fecham o modal
+#### 9. Comandos 'falsos' na paleta: Negrito, Itálico e Salvar Manualmente só fecham o modal  ✅ **RESOLVIDO (02/11)**
 `UX/UI & Acessibilidade` · veredito **CONFIRMADO** · esforço **baixo** · categoria *ux*
 
 **Arquivos:** `src/components/modals/CommandPalette.tsx:34-42`, `src/components/modals/CommandPalette.tsx:87-100`, `src/components/editor/EditorToolbar.tsx:12-76`
