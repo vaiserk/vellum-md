@@ -94,6 +94,29 @@ function App() {
     };
   }, [vaultPath]);
 
+  // Itens do menu "Arquivo" e "Exibir" que equivalem a atalhos de teclado.
+  // Quem usa menu em vez de atalho precisa chegar no mesmo lugar.
+  useEffect(() => {
+    const desinscrever = window.electron.menu.onComando((comando) => {
+      const store = useVaultStore.getState();
+      switch (comando) {
+        case 'nova-nota':
+          if (store.vaultPath) store.setNewNoteModalOpen(true);
+          break;
+        case 'salvar':
+          store.editorView?.focus();
+          window.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, key: 's' }));
+          break;
+        case 'exportar':      setExportOpen(prev => !prev); break;
+        // Estes dois vêm das stores e recebem o valor, não uma função
+        case 'configuracoes': setSettingsOpen(!useSettingsStore.getState().settingsOpen); break;
+        case 'paleta':        setCommandPaletteOpen(!useVaultStore.getState().commandPaletteOpen); break;
+        case 'layout':        store.cycleLayoutMode(); break;
+      }
+    });
+    return desinscrever;
+  }, [setSettingsOpen]);
+
   // Acompanha o tema do Windows em tempo real enquanto o usuário não escolher
   // um tema manualmente (applySystemTheme ignora a mudança depois disso).
   useEffect(() => {

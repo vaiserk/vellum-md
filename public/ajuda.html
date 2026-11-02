@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ajuda do VellumMD</title>
+<style>
+  /* Autocontido de propósito: sem fonte, CSS ou script de fora.
+     O VellumMD é local-first — a ajuda também precisa abrir sem internet. */
+  :root {
+    /* Faz as barras de rolagem NATIVAS seguirem o tema. Sem isto, o Chromium
+       as desenha claras mesmo no modo escuro, deixando uma faixa branca entre
+       a navegação e o conteúdo. */
+    color-scheme: light dark;
+    --roxo: #5b4fe0;
+    --roxo-claro: #efedfd;
+    --fundo: #ffffff;
+    --fundo-alt: #f6f7f9;
+    --texto: #1f2328;
+    --texto-fraco: #5a6472;
+    --borda: #d8dee4;
+    --verde: #1a7f37;
+    --ambar: #9a6700;
+    --vermelho: #cf222e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --roxo: #8b7dff;
+      --roxo-claro: #241f4d;
+      --fundo: #16181d;
+      --fundo-alt: #1e2127;
+      --texto: #e6e9ef;
+      --texto-fraco: #9aa4b2;
+      --borda: #30363d;
+      --verde: #3fb950;
+      --ambar: #d29922;
+      --vermelho: #f85149;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    color: var(--texto);
+    background: var(--fundo);
+  }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* ── Navegação lateral ─────────────────────────────────────────── */
+  nav {
+    width: 268px;
+    flex-shrink: 0;
+    background: var(--fundo-alt);
+    border-right: 1px solid var(--borda);
+    padding: 24px 0 48px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  nav .marca {
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 20px 18px; margin-bottom: 10px;
+    border-bottom: 1px solid var(--borda);
+  }
+  nav .marca strong { font-size: 17px; }
+  nav .marca span { font-size: 12px; color: var(--texto-fraco); display: block; font-weight: 400; }
+  nav a {
+    display: block; padding: 7px 20px;
+    color: var(--texto-fraco); text-decoration: none; font-size: 14.5px;
+    border-left: 3px solid transparent;
+  }
+  nav a:hover { color: var(--texto); background: var(--roxo-claro); }
+  nav a.secao { margin-top: 14px; font-size: 11.5px; text-transform: uppercase;
+                letter-spacing: .08em; font-weight: 700; color: var(--texto-fraco);
+                pointer-events: none; }
+
+  /* ── Conteúdo ──────────────────────────────────────────────────── */
+  main { flex: 1; max-width: 860px; padding: 40px 48px 120px; }
+  h1 { font-size: 34px; margin: 0 0 8px; letter-spacing: -.5px; }
+  .sub { color: var(--texto-fraco); font-size: 17px; margin: 0 0 40px; }
+  h2 {
+    font-size: 25px; margin: 56px 0 14px; padding-top: 14px;
+    border-top: 1px solid var(--borda);
+  }
+  h2:first-of-type { border-top: none; margin-top: 36px; }
+  h3 { font-size: 18px; margin: 30px 0 8px; }
+  p { margin: 12px 0; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 7px 0; }
+  code {
+    font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+    font-size: .88em; background: var(--fundo-alt);
+    border: 1px solid var(--borda); border-radius: 5px; padding: 1px 6px;
+  }
+  pre {
+    background: var(--fundo-alt); border: 1px solid var(--borda);
+    border-radius: 8px; padding: 14px 16px; overflow-x: auto;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: .88em; }
+
+  kbd {
+    font-family: inherit; font-size: 12.5px; font-weight: 600;
+    background: var(--fundo); color: var(--texto);
+    border: 1px solid var(--borda); border-bottom-width: 2px;
+    border-radius: 5px; padding: 2px 7px; white-space: nowrap;
+  }
+
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 15px; }
+  th, td { border: 1px solid var(--borda); padding: 9px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--fundo-alt); font-weight: 600; }
+  td:first-child { white-space: nowrap; }
+
+  .nota, .aviso, .dica {
+    border-left: 4px solid; border-radius: 0 8px 8px 0;
+    padding: 12px 16px; margin: 18px 0; background: var(--fundo-alt);
+  }
+  .nota  { border-color: var(--roxo); }
+  .dica  { border-color: var(--verde); }
+  .aviso { border-color: var(--ambar); }
+  .nota strong, .dica strong, .aviso strong { display: block; margin-bottom: 4px; }
+  .dica strong  { color: var(--verde); }
+  .aviso strong { color: var(--ambar); }
+  .nota strong  { color: var(--roxo); }
+
+  .passos { counter-reset: p; list-style: none; padding-left: 0; }
+  .passos > li {
+    counter-increment: p; position: relative;
+    padding-left: 44px; margin: 16px 0;
+  }
+  .passos > li::before {
+    content: counter(p);
+    position: absolute; left: 0; top: 1px;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--roxo); color: #fff;
+    font-size: 14px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .busca-atalhos {
+    width: 100%; padding: 11px 14px; font-size: 15px; font-family: inherit;
+    border: 1px solid var(--borda); border-radius: 8px;
+    background: var(--fundo); color: var(--texto); margin: 8px 0 4px;
+  }
+  .busca-atalhos:focus { outline: 2px solid var(--roxo); outline-offset: -1px; }
+  tr.oculta { display: none; }
+  .sem-resultado { color: var(--texto-fraco); font-style: italic; padding: 10px 0; }
+
+  footer {
+    margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--borda);
+    color: var(--texto-fraco); font-size: 14px;
+  }
+  @media (max-width: 860px) {
+    nav { display: none; }
+    main { padding: 28px 20px 80px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav>
+  <div class="marca">
+    <div>
+      <strong>VellumMD</strong>
+      <span>Manual de uso</span>
+    </div>
+  </div>
+  <a class="secao">Começando</a>
+  <a href="#inicio">O que é o VellumMD</a>
+  <a href="#primeiros-passos">Primeiros passos</a>
+  <a href="#interface">Conhecendo a tela</a>
+  <a class="secao">Escrevendo</a>
+  <a href="#escrever">Escrever e salvar</a>
+  <a href="#formatacao">Formatação</a>
+  <a href="#formulas">Fórmulas</a>
+  <a href="#diagramas">Diagramas</a>
+  <a href="#wikilinks">Ligar notas</a>
+  <a href="#tabelas">Tabelas</a>
+  <a class="secao">Organizar</a>
+  <a href="#arquivos">Pastas e arquivos</a>
+  <a href="#lixeira">Lixeira</a>
+  <a href="#tags">Tags</a>
+  <a class="secao">Encontrar</a>
+  <a href="#busca">Busca semântica</a>
+  <a class="secao">Inteligência artificial</a>
+  <a href="#ia">Assistente</a>
+  <a href="#configurar-ia">Configurar a IA</a>
+  <a class="secao">Publicar</a>
+  <a href="#exportar">Exportar</a>
+  <a class="secao">Referência</a>
+  <a href="#atalhos">Atalhos de teclado</a>
+  <a href="#barra">Comandos de barra</a>
+  <a href="#config">Configurações</a>
+  <a href="#problemas">Solução de problemas</a>
+  <a href="#privacidade">Privacidade</a>
+</nav>
+
+<main>
+
+<h1>Ajuda do VellumMD</h1>
+<p class="sub">Tudo que o aplicativo faz, em ordem de uso. Esta página funciona sem internet.</p>
+
+<h2 id="inicio">O que é o VellumMD</h2>
+<p>
+  O VellumMD é um editor de notas em <strong>Markdown</strong> para computador. Três
+  coisas o definem:
+</p>
+<ul>
+  <li><strong>Seus arquivos são seus.</strong> Cada nota é um arquivo <code>.md</code>
+      comum, numa pasta que você escolhe. Nada vai para servidor nenhum.</li>
+  <li><strong>Busca por significado.</strong> Você encontra uma nota mesmo sem lembrar
+      as palavras exatas que usou nela.</li>
+  <li><strong>Assistente de IA integrado</strong>, opcional, que trabalha sobre o que
+      você já escreveu.</li>
+</ul>
+
+<div class="nota">
+  <strong>Vault é só uma pasta</strong>
+  Ao longo desta ajuda você vai ler "vault". É simplesmente a pasta onde suas notas
+  ficam. Você pode abri-la no Explorador de Arquivos normalmente, fazer backup,
+  sincronizar com a nuvem que quiser, ou abrir as mesmas notas em outro programa.
+</div>
+
+<h2 id="primeiros-passos">Primeiros passos</h2>
+<ol class="passos">
+  <li><strong>Escolha uma pasta para suas notas.</strong> Na primeira execução o
+      assistente pede isso. Pode ser uma pasta vazia nova ou uma que já tenha arquivos
+      <code>.md</code>.</li>
+  <li><strong>Configure a IA — ou pule.</strong> A inteligência artificial é opcional.
+      Sem ela, o editor, a organização, a busca por texto e a exportação continuam
+      funcionando normalmente. Dá para configurar depois em
+      <kbd>Ctrl</kbd>+<kbd>,</kbd>.</li>
+  <li><strong>Crie sua primeira nota</strong> com <kbd>Ctrl</kbd>+<kbd>N</kbd>.</li>
+  <li><strong>Escreva.</strong> O texto é salvo sozinho enquanto você digita.</li>
+</ol>
+
+<h2 id="interface">Conhecendo a tela</h2>
+<p>A janela tem três áreas:</p>
+<table>
+  <tr><th>Área</th><th>Para que serve</th></tr>
+  <tr><td><strong>Barra lateral</strong><br>(esquerda)</td>
+      <td>Quatro abas: <strong>Arquivos</strong> (a árvore de notas),
+          <strong>Busca</strong> 🔍, <strong>Tags</strong> 🏷 e
+          <strong>Links</strong> 🔗 (quais notas apontam para a atual).</td></tr>
+  <tr><td><strong>Editor</strong><br>(centro)</td>
+      <td>Onde você escreve, com a barra de ferramentas no topo.</td></tr>
+  <tr><td><strong>Pré-visualização</strong><br>(direita)</td>
+      <td>Como a nota fica formatada.</td></tr>
+</table>
+
+<h3>Os três modos de exibição</h3>
+<p>
+  Pressione <kbd>Ctrl</kbd>+<kbd>\</kbd> para alternar entre
+  <strong>dividido</strong> (editor e pré-visualização lado a lado),
+  <strong>só pré-visualização</strong> e <strong>só editor</strong>.
+  O modo atual aparece no canto inferior direito.
+</p>
+
+<h3>Barra de status (rodapé)</h3>
+<p>
+  Mostra a contagem de palavras e caracteres, o tempo estimado de leitura, a posição do
+  cursor, o modo de exibição e o estado do salvamento —
+  <em>Salvando…</em> enquanto grava e <em>Salvo</em> quando termina.
+</p>
+
+<h2 id="escrever">Escrever e salvar</h2>
+<p>
+  <strong>Não existe botão de salvar obrigatório.</strong> O VellumMD grava sozinho
+  pouco depois de você parar de digitar. Se preferir forçar,
+  <kbd>Ctrl</kbd>+<kbd>S</kbd> grava na hora.
+</p>
+<div class="dica">
+  <strong>Fechar o app não perde o que você acabou de escrever</strong>
+  Mesmo que você feche a janela no meio de uma frase, o texto pendente é gravado antes
+  de o aplicativo encerrar.
+</div>
+
+<h3>Modo foco (máquina de escrever)</h3>
+<p>
+  <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> mantém a linha que você está
+  escrevendo centralizada na tela e esmaece o restante. Útil para textos longos.
+</p>
+
+<h2 id="formatacao">Formatação</h2>
+<p>
+  O Markdown formata com caracteres comuns. Você pode digitá-los ou usar a barra de
+  ferramentas.
+</p>
+<table>
+  <tr><th>Para</th><th>Escreva</th><th>Atalho</th></tr>
+  <tr><td>Negrito</td><td><code>**texto**</code></td><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td></tr>
+  <tr><td>Itálico</td><td><code>*texto*</code></td><td><kbd>Ctrl</kbd>+<kbd>I</kbd></td></tr>
+  <tr><td>Título</td><td><code># Título</code> (até <code>######</code>)</td><td>botões H1 H2 H3</td></tr>
+  <tr><td>Lista</td><td><code>- item</code></td><td>botão de lista</td></tr>
+  <tr><td>Lista numerada</td><td><code>1. item</code></td><td>—</td></tr>
+  <tr><td>Tarefa</td><td><code>- [ ] a fazer</code> / <code>- [x] feito</code></td><td>—</td></tr>
+  <tr><td>Citação</td><td><code>&gt; texto</code></td><td>botão de citação</td></tr>
+  <tr><td>Código</td><td><code>`código`</code></td><td>botão <code>&lt;&gt;</code></td></tr>
+  <tr><td>Link</td><td><code>[texto](https://site.com)</code></td><td>botão de link</td></tr>
+  <tr><td>Imagem</td><td><code>![descrição](caminho-ou-url)</code></td><td>botão de imagem</td></tr>
+  <tr><td>Linha divisória</td><td><code>---</code></td><td>—</td></tr>
+</table>
+
+<div class="aviso">
+  <strong>Duas regras do Markdown que confundem</strong>
+  <ul style="margin:6px 0 0">
+    <li>Não pode haver espaço antes do fechamento: <code>**texto **</code>
+        <em>não</em> vira negrito. O correto é <code>**texto**</code>.</li>
+    <li>Tarefa só funciona com <code>[ ]</code> ou <code>[x]</code> exatamente —
+        <code>[ x ]</code> não conta.</li>
+  </ul>
+  Essas regras valem em qualquer editor de Markdown (Obsidian, GitHub). É o preço de
+  usar um formato aberto — e a vantagem é que suas notas funcionam em todos eles.
+</div>
+
+<h3>Destaques (callouts)</h3>
+<p>Blocos de aviso coloridos:</p>
+<pre><code>&gt; [!NOTE]
+&gt; Uma observação.
+
+&gt; [!TIP]
+&gt; Uma dica.
+
+&gt; [!WARNING]
+&gt; Um alerta.</code></pre>
+<p>Também existem <code>[!IMPORTANT]</code> e <code>[!CAUTION]</code>.</p>
+
+<h2 id="formulas">Fórmulas matemáticas</h2>
+<p>Escreva em LaTeX. No meio de uma frase, entre cifrões simples:</p>
+<pre><code>A área é $A = \pi r^2$ para raio $r$.</code></pre>
+<p>Em destaque, numa linha só dela, entre cifrões duplos:</p>
+<pre><code>$$
+x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}
+$$</code></pre>
+<p>
+  Atalho: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd> insere um bloco pronto.
+  A fórmula aparece renderizada <strong>dentro do próprio editor</strong>; clique nela
+  para voltar a ver e editar o código.
+</p>
+
+<h2 id="diagramas">Diagramas</h2>
+<p>Use blocos <code>mermaid</code>:</p>
+<pre><code>```mermaid
+graph LR
+  A[Ideia] --&gt; B[Rascunho]
+  B --&gt; C[Texto final]
+```</code></pre>
+<p>
+  Atalho: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd>. Além de fluxogramas
+  (<code>graph</code>), dá para fazer sequência, Gantt, pizza e outros.
+</p>
+<div class="dica">
+  <strong>Rótulos com símbolos</strong>
+  Se o texto de uma caixa tiver parênteses, vírgulas ou acentos que confundam o
+  diagrama, ponha entre aspas: <code>A["Capítulo 2 (revisão)"]</code>.
+</div>
+
+<h2 id="wikilinks">Ligar notas entre si</h2>
+<p>
+  Escreva <code>[[Nome da nota]]</code> para criar uma ligação. Segure
+  <kbd>Ctrl</kbd> e clique para abrir.
+</p>
+<p>Variações:</p>
+<ul>
+  <li><code>[[Nota|outro texto]]</code> — mostra um texto diferente do nome do arquivo</li>
+  <li><code>[[Nota#Seção]]</code> — aponta para um título dentro da nota</li>
+</ul>
+<p>
+  A aba <strong>Links</strong> 🔗 mostra quais notas apontam para a que está aberta.
+  É assim que a rede de conhecimento vai se formando.
+</p>
+<div class="nota">
+  <strong>Renomear não quebra as ligações</strong>
+  Ao renomear uma nota, o VellumMD atualiza os <code>[[links]]</code> das outras notas
+  automaticamente, inclusive os que usam apelido ou seção.
+</div>
+
+<h2 id="tabelas">Tabelas</h2>
+<pre><code>| Coluna 1 | Coluna 2 |
+|---|---|
+| valor    | valor    |</code></pre>
+<p>
+  O jeito mais fácil é o botão de tabela na barra, ou digitar <code>/table</code>.
+  A tabela aparece montada tanto no editor quanto na pré-visualização; clique nela
+  para editar o texto de novo.
+</p>
+<p>
+  Para alinhar colunas, use dois-pontos na linha de separação:
+  <code>|:---|</code> à esquerda, <code>|:---:|</code> ao centro,
+  <code>|---:|</code> à direita.
+</p>
+
+<h2 id="arquivos">Pastas e arquivos</h2>
+<table>
+  <tr><th>Ação</th><th>Como fazer</th></tr>
+  <tr><td>Criar nota</td><td><kbd>Ctrl</kbd>+<kbd>N</kbd>. Dá para escolher a pasta de destino.</td></tr>
+  <tr><td>Abrir nota</td><td>Clique na árvore de arquivos.</td></tr>
+  <tr><td>Renomear</td><td>Botão direito → Renomear</td></tr>
+  <tr><td>Mover de pasta</td><td>Botão direito → Mover para…</td></tr>
+  <tr><td>Excluir</td><td>Botão direito → Excluir (vai para a lixeira)</td></tr>
+  <tr><td>Abrir/fechar pasta</td><td>Clique no nome da pasta</td></tr>
+  <tr><td>Trocar de vault</td><td>Botão <strong>Trocar Vault</strong> no topo da lateral</td></tr>
+</table>
+<div class="aviso">
+  <strong>Nomes de arquivo no Windows</strong>
+  Os caracteres <code>\ / : * ? " &lt; &gt; |</code> não são aceitos em nomes de
+  arquivo. Se você tentar criar <em>Cap 2: Metodologia</em>, o app avisa — troque por
+  um hífen: <em>Cap 2 - Metodologia</em>.
+</div>
+
+<h2 id="lixeira">Lixeira</h2>
+<p>
+  Notas excluídas não somem: vão para uma lixeira dentro do próprio vault
+  (<code>.vellum/trash</code>).
+</p>
+<ul>
+  <li>Logo após excluir, aparece um aviso no rodapé com <strong>Desfazer</strong>.</li>
+  <li>Passado esse tempo, clique no ícone de <strong>lixeira</strong> 🗑 na barra
+      lateral: ele lista tudo que foi excluído, com data, e restaura o que você
+      escolher — de volta à pasta original.</li>
+</ul>
+
+<h2 id="tags">Tags</h2>
+<p>Adicione tags no começo da nota, entre três hifens:</p>
+<pre><code>---
+title: "Minha nota"
+tags: [tcc, metodologia]
+---</code></pre>
+<p>A aba <strong>Tags</strong> 🏷 lista todas e filtra as notas de cada uma.</p>
+
+<h2 id="busca">Busca</h2>
+<p>A aba <strong>Busca</strong> 🔍 tem dois comportamentos:</p>
+<ul>
+  <li><strong>Busca por texto</strong> — encontra a palavra exata. Funciona sempre,
+      sem configuração.</li>
+  <li><strong>Busca semântica</strong> — encontra por <em>significado</em>. Exige a IA
+      configurada.</li>
+</ul>
+<h3>Por que a busca semântica importa</h3>
+<p>
+  Procurando por <em>"como reduzir o esforço de lembrar das coisas"</em>, ela encontra
+  uma nota sobre memória de trabalho e externalização do conhecimento — mesmo que
+  nenhuma dessas palavras apareça lá. Cada resultado mostra o quanto combina, em
+  porcentagem.
+</p>
+<div class="nota">
+  <strong>A primeira indexação demora</strong>
+  Ao abrir um vault pela primeira vez, o app precisa ler e indexar as notas — aparece
+  <em>"Indexando… 11/21"</em> acima da caixa de busca. Depois disso só o que mudou é
+  reprocessado, então as próximas vezes são rápidas.
+</div>
+
+<h2 id="ia">Assistente de IA</h2>
+<p>Abra com <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd>. Ele enxerga a nota aberta.</p>
+<h3>As nove ações rápidas</h3>
+<table>
+  <tr><th>Botão</th><th>O que faz</th></tr>
+  <tr><td>Expandir</td><td>Desenvolve o trecho com mais detalhe e exemplos</td></tr>
+  <tr><td>Resumir</td><td>Resume a nota em tópicos principais</td></tr>
+  <tr><td>Corrigir</td><td>Corrige gramática e ortografia</td></tr>
+  <tr><td>Organizar</td><td>Reestrutura a nota com títulos e seções</td></tr>
+  <tr><td>Perguntas</td><td>Levanta perguntas que um leitor teria</td></tr>
+  <tr><td>Flashcards</td><td>Gera cartões de pergunta e resposta para estudo</td></tr>
+  <tr><td>Diagrama</td><td>Cria um diagrama Mermaid do que a nota descreve</td></tr>
+  <tr><td>Tabela</td><td>Organiza as informações em tabela</td></tr>
+  <tr><td>Callout</td><td>Transforma o ponto principal num bloco de destaque</td></tr>
+</table>
+<div class="dica">
+  <strong>Selecione antes de clicar</strong>
+  Se você <strong>selecionar um trecho</strong> no editor, ações como Expandir e
+  Corrigir trabalham sobre essa seleção. Sem seleção, elas consideram a nota inteira.
+</div>
+<p>
+  Também dá para conversar livremente no campo de baixo: <kbd>Enter</kbd> envia e
+  <kbd>Shift</kbd>+<kbd>Enter</kbd> quebra a linha. O botão
+  <strong>Inserir ↗</strong> abaixo de cada resposta coloca o texto na nota.
+</p>
+
+<h2 id="configurar-ia">Configurar a IA</h2>
+<ol class="passos">
+  <li>Abra as configurações com <kbd>Ctrl</kbd>+<kbd>,</kbd></li>
+  <li>Escolha o provedor (Google Gemini, OpenAI, Anthropic ou Groq)</li>
+  <li>Cole sua chave de API</li>
+  <li>Escolha o modelo, ou use <strong>Descobrir modelos</strong> para listar os
+      disponíveis na sua chave</li>
+</ol>
+<div class="aviso">
+  <strong>Trocar o modelo de embeddings reindexará tudo</strong>
+  O modelo usado na busca semântica fica guardado junto do índice. Se você trocá-lo,
+  o vault inteiro precisa ser reprocessado — o que leva tempo e consome a cota da API.
+</div>
+
+<h2 id="exportar">Exportar</h2>
+<p>
+  <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> abre a exportação, com três formatos.
+  Fórmulas e diagramas vão renderizados nos três.
+</p>
+<table>
+  <tr><th>Formato</th><th>Resultado</th></tr>
+  <tr><td><strong>PDF</strong></td>
+      <td>A nota atual em documento, com escolha de tamanho de papel e orientação.</td></tr>
+  <tr><td><strong>Slides</strong></td>
+      <td>Apresentação a partir da nota. Você divide o conteúdo em slides e escolhe
+          tema e transição.</td></tr>
+  <tr><td><strong>Site</strong></td>
+      <td>Um site navegável com todas as notas, com menu e links funcionando.</td></tr>
+</table>
+<div class="dica">
+  <strong>Os arquivos gerados funcionam sem internet</strong>
+  Tudo que o PDF ou o site precisam fica embutido no próprio arquivo. Dá para
+  mandar por e-mail, pôr num pen drive ou hospedar em qualquer lugar.
+</div>
+
+<h2 id="atalhos">Atalhos de teclado</h2>
+<input id="filtro" class="busca-atalhos" type="search"
+       placeholder="Filtrar atalhos… (ex.: exportar, busca, negrito)"
+       aria-label="Filtrar atalhos" />
+<p class="sem-resultado" id="vazio" hidden>Nenhum atalho corresponde ao que você digitou.</p>
+
+<table id="tabela-atalhos">
+  <thead><tr><th>Atalho</th><th>O que faz</th></tr></thead>
+  <tbody>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>Paleta de comandos (acesso a tudo)</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>Nova nota</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Salvar agora</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>\</kbd></td><td>Alternar modo de exibição</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>,</kbd></td><td>Configurações</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd></td><td>Assistente de IA</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td><td>Exportar</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>Fechar o painel ou janela aberta</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td><td>Negrito</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>I</kbd></td><td>Itálico</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd></td><td>Modo foco (máquina de escrever)</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd></td><td>Inserir bloco de fórmula</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd></td><td>Inserir diagrama</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+clique</td><td>Abrir o wikilink sob o cursor</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>Desfazer</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td>Refazer</td></tr>
+    <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Navegar na paleta de comandos</td></tr>
+    <tr><td><kbd>Enter</kbd></td><td>Confirmar (paleta, modais, envio na IA)</td></tr>
+    <tr><td><kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>Quebrar linha na IA sem enviar</td></tr>
+  </tbody>
+</table>
+
+<div class="dica">
+  <strong>Na dúvida, <kbd>Ctrl</kbd>+<kbd>P</kbd></strong>
+  A paleta de comandos lista tudo que o app faz, com o atalho de cada item ao lado. É
+  a forma mais rápida de descobrir e de lembrar.
+</div>
+
+<h2 id="barra">Comandos de barra</h2>
+<p>
+  Digite <code>/</code> no <strong>começo de uma linha</strong> para abrir a lista e
+  inserir estruturas prontas:
+</p>
+<table>
+  <tr><th>Comando</th><th>Insere</th></tr>
+  <tr><td><code>/latex</code> ou <code>/math</code></td><td>Bloco de fórmula</td></tr>
+  <tr><td><code>/mermaid</code></td><td>Diagrama</td></tr>
+  <tr><td><code>/table</code></td><td>Tabela 3×3</td></tr>
+  <tr><td><code>/callout</code></td><td>Bloco de destaque</td></tr>
+  <tr><td><code>/code</code></td><td>Bloco de código</td></tr>
+  <tr><td><code>/image</code></td><td>Imagem</td></tr>
+  <tr><td><code>/link</code></td><td>Link</td></tr>
+  <tr><td><code>/hr</code></td><td>Linha divisória</td></tr>
+  <tr><td><code>/date</code></td><td>Data de hoje</td></tr>
+</table>
+
+<h2 id="config">Configurações</h2>
+<p><kbd>Ctrl</kbd>+<kbd>,</kbd> abre:</p>
+<ul>
+  <li><strong>Tema</strong> — claro ou escuro. Sem escolha manual, o app segue o tema
+      do Windows e muda junto com ele.</li>
+  <li><strong>Fonte e tamanho</strong> do editor.</li>
+  <li><strong>Provedor de IA</strong>, chave e modelo.</li>
+  <li><strong>Sugestão de notas relacionadas</strong> — liga ou desliga o painel que
+      aparece enquanto você escreve.</li>
+</ul>
+
+<h2 id="problemas">Solução de problemas</h2>
+
+<h3>A busca semântica não retorna nada</h3>
+<p>
+  Confirme em <kbd>Ctrl</kbd>+<kbd>,</kbd> se há chave de API e se a indexação
+  terminou. Se a mensagem falar em chave inválida, confira se a chave corresponde ao
+  provedor escolhido.
+</p>
+
+<h3>Minha fórmula não aparece</h3>
+<p>
+  Fórmula em destaque precisa dos <code>$$</code> em linhas próprias. Dentro do texto,
+  use cifrão simples. Se o cursor estiver dentro dela, ela fica em modo de edição —
+  clique fora para ver o resultado.
+</p>
+
+<h3>Meu diagrama não aparece</h3>
+<p>
+  Normalmente é erro de sintaxe. Comece simples (<code>graph LR</code> com duas
+  caixas) e cresça aos poucos. Rótulos com símbolos pedem aspas.
+</p>
+
+<h3>As tags não aparecem</h3>
+<p>
+  O bloco precisa estar <strong>no começo do arquivo</strong>, entre linhas com três
+  hifens, e no formato <code>tags: [uma, outra]</code>.
+</p>
+
+<h3>Alterei a nota por fora e o app não mostrou</h3>
+<p>
+  O VellumMD acompanha mudanças feitas por outros programas, com um pequeno atraso.
+  Se não atualizar, troque de nota e volte.
+</p>
+
+<h3>Algo deu errado e apareceu uma tela de erro</h3>
+<p>
+  Use o botão <strong>Recarregar o aplicativo</strong>. Suas notas não são afetadas —
+  elas estão em disco. O botão de copiar detalhes ajuda a relatar o problema.
+</p>
+
+<h2 id="privacidade">Privacidade</h2>
+<p>Onde suas informações ficam:</p>
+<table>
+  <tr><th>O quê</th><th>Onde fica</th></tr>
+  <tr><td>Suas notas</td><td>Na pasta do vault, em arquivos <code>.md</code> comuns</td></tr>
+  <tr><td>Índice de busca</td><td><code>.vellum/</code> dentro do vault</td></tr>
+  <tr><td>Notas excluídas</td><td><code>.vellum/trash</code> dentro do vault</td></tr>
+  <tr><td>Chave de API</td><td>Só na sua máquina</td></tr>
+</table>
+<p>
+  <strong>A única comunicação com a internet</strong> acontece quando você usa a IA ou
+  a busca semântica: o trecho necessário é enviado ao provedor que você escolheu.
+  Sem configurar a IA, o VellumMD não acessa a rede.
+</p>
+<p>
+  Desinstalar o programa <strong>não apaga suas notas</strong>. Elas continuam na pasta
+  que você escolheu, em formato aberto, legíveis em qualquer editor de texto.
+</p>
+
+<footer>
+  VellumMD — editor de Markdown local-first com busca semântica e assistência por IA.<br>
+  Esta ajuda é distribuída junto do aplicativo e funciona sem conexão.
+</footer>
+
+</main>
+</div>
+
+<script>
+  // Filtro da tabela de atalhos. Sem dependência externa de propósito:
+  // a ajuda precisa abrir offline, dentro do aplicativo.
+  (function () {
+    var campo = document.getElementById('filtro');
+    var tabela = document.getElementById('tabela-atalhos');
+    var vazio = document.getElementById('vazio');
+    if (!campo || !tabela || !vazio) return;
+    var linhas = Array.prototype.slice.call(tabela.tBodies[0].rows);
+
+    campo.addEventListener('input', function () {
+      var termo = campo.value.trim().toLowerCase();
+      var visiveis = 0;
+      linhas.forEach(function (linha) {
+        var combina = !termo || linha.textContent.toLowerCase().indexOf(termo) !== -1;
+        linha.classList.toggle('oculta', !combina);
+        if (combina) visiveis++;
+      });
+      vazio.hidden = visiveis > 0;
+    });
+  })();
+</script>
+</body>
+</html>

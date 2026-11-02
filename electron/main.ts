@@ -3,6 +3,7 @@ import path from 'path';
 import { pathToFileURL } from 'url';
 import { setupFsHandlers } from './handlers/fs.handler';
 import { setupExportHandlers } from './handlers/export.handler';
+import { montarMenu } from './menu';
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 let mainWindow: BrowserWindow | null = null;
@@ -81,6 +82,7 @@ function createWindow() {
 app.whenReady().then(() => {
   setupFsHandlers(ipcMain, dialog);
   setupExportHandlers();
+  montarMenu();
   createWindow();
 
   app.on('activate', () => {

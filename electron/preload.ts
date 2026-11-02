@@ -35,6 +35,14 @@ contextBridge.exposeInMainWorld('electron', {
     slides: (options: any) => ipcRenderer.invoke('export:slides', options),
     site: (options: any) => ipcRenderer.invoke('export:site', options),
   },
+  menu: {
+    // Itens do menu que equivalem a atalhos de teclado (Nova nota, Exportar...)
+    onComando: (callback: (comando: string) => void) => {
+      const listener = (_e: unknown, nome: string) => callback(nome);
+      ipcRenderer.on('menu:comando', listener);
+      return () => ipcRenderer.removeListener('menu:comando', listener);
+    },
+  },
   shell: {
     openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   },
