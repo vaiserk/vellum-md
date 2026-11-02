@@ -11,3 +11,6 @@ release/
 # Livros/PDFs de referencia (material protegido — nao versionar)
 *.pdf
 *.crdownload
+
+# Banner do TCC (arquivos grandes: pptx, capturas, vault de demonstracao)
+docs/banner/
