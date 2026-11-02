@@ -59,15 +59,23 @@ export function EditorToolbar() {
           selection: { anchor: selection.from, head: selection.from + innerText.length }
         });
       } else {
+        // O Markdown exige que o delimitador de fechamento NÃO venha precedido
+        // de espaço: "**texto **" simplesmente não vira negrito. Selecionar a
+        // palavra junto com o espaço seguinte (o que o duplo clique costuma
+        // fazer) produzia exatamente isso, e o botão parecia quebrado.
+        // Os espaços das pontas ficam de fora dos marcadores.
+        const inicio = selection.from + (text.length - text.trimStart().length);
+        const fim = selection.to - (text.length - text.trimEnd().length);
+        const miolo = text.trim();
+
+        // Seleção só de espaços: não há o que formatar
+        if (!miolo) return;
+
         editorView.dispatch({
-          changes: {
-            from: selection.from,
-            to: selection.to,
-            insert: prefix + text + suffix
-          },
-          selection: { 
-            anchor: selection.from + prefix.length, 
-            head: selection.to + prefix.length 
+          changes: { from: inicio, to: fim, insert: prefix + miolo + suffix },
+          selection: {
+            anchor: inicio + prefix.length,
+            head: inicio + prefix.length + miolo.length
           }
         });
       }

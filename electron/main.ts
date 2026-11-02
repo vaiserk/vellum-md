@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
 import path from 'path';
+import { pathToFileURL } from 'url';
 import { setupFsHandlers } from './handlers/fs.handler';
 import { setupExportHandlers } from './handlers/export.handler';
 
@@ -27,13 +28,28 @@ function createWindow() {
   // disco. Por isso a janela nunca sai do bundle local e nenhum popup é aberto:
   // links externos vão para o navegador do sistema.
   const appOrigin = process.env.VITE_DEV_SERVER_URL;
+  const paginaDoApp = pathToFileURL(path.join(__dirname, '../dist/index.html')).href;
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    const permitido = appOrigin ? url.startsWith(appOrigin) : url.startsWith('file://');
+    // Só a própria página do app. A versão anterior liberava QUALQUER file://,
+    // e um link relativo numa nota (ex.: "www.google.com") navegava para
+    // file:///.../www.google.com: a pagina falhava e o app virava tela branca
+    // sem caminho de volta.
+    const semHash = url.split('#')[0];
+    const permitido = appOrigin ? url.startsWith(appOrigin) : semHash === paginaDoApp;
     if (!permitido) {
       event.preventDefault();
       console.warn('[seguranca] navegacao bloqueada:', url);
     }
+  });
+
+  // Rede de segurança: se ainda assim a janela acabar numa pagina que nao
+  // carrega, volta para o app em vez de deixar a tela branca.
+  mainWindow.webContents.on('did-fail-load', (_e, codigo, descricao, urlQueFalhou, ehPrincipal) => {
+    if (!ehPrincipal || codigo === -3 /* abortado pelo proprio app */) return;
+    console.error('[recuperacao] falha ao carregar:', urlQueFalhou, codigo, descricao);
+    if (appOrigin) mainWindow?.loadURL(appOrigin);
+    else mainWindow?.loadFile(path.join(__dirname, '../dist/index.html'));
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {

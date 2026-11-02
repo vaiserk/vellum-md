@@ -14,6 +14,35 @@ function readModuleFile(spec: string): string {
   return fs.readFileSync(require.resolve(spec), 'utf-8');
 }
 
+/**
+ * Lê um arquivo de dentro de um pacote ignorando o mapa `exports`.
+ *
+ * O reveal.js 6 declara `exports` e só publica `./reset.css`, `./reveal.css` e
+ * `./theme/*` — pedir `reveal.js/dist/reset.css` por require.resolve falha com
+ * "Package subpath './dist/reset.css' is not defined by exports", e a
+ * exportação de slides morria com essa mensagem crua na tela.
+ *
+ * Resolver a raiz do pacote pelo package.json (que todo pacote expõe) e juntar
+ * o caminho manualmente funciona independentemente do mapa de exports e de
+ * mudanças de versão.
+ */
+function raizDoPacote(pacote: string): string {
+  // O entry principal (".") está sempre no mapa de exports. Subindo a partir
+  // dele até achar o package.json chega-se à raiz — o reveal.js 6 nem expõe
+  // "./package.json", então resolvê-lo diretamente também falharia.
+  let dir = path.dirname(require.resolve(pacote));
+  while (!fs.existsSync(path.join(dir, 'package.json'))) {
+    const pai = path.dirname(dir);
+    if (pai === dir) throw new Error(`Nao foi possivel localizar a raiz do pacote ${pacote}`);
+    dir = pai;
+  }
+  return dir;
+}
+
+function readPackageFile(pacote: string, caminhoRelativo: string): string {
+  return fs.readFileSync(path.join(raizDoPacote(pacote), caminhoRelativo), 'utf-8');
+}
+
 let _katexCssInline: string | null = null;
 /** CSS do KaTeX com as fontes woff2 embutidas como data URIs (cacheado). */
 function getKatexCssInline(): string {
@@ -287,9 +316,9 @@ export function setupExportHandlers() {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(options.title || 'Apresentação')}</title>
-  <style>${readModuleFile('reveal.js/dist/reset.css')}</style>
-  <style>${readModuleFile('reveal.js/dist/reveal.css')}</style>
-  <style>${readModuleFile(`reveal.js/dist/theme/${theme}.css`)}</style>
+  <style>${readPackageFile('reveal.js', 'dist/reset.css')}</style>
+  <style>${readPackageFile('reveal.js', 'dist/reveal.css')}</style>
+  <style>${readPackageFile('reveal.js', `dist/theme/${theme}.css`)}</style>
   <style>${getKatexCssInline()}</style>
   <style>${getHljsCss(true)}</style>
   <style>
@@ -323,7 +352,7 @@ export function setupExportHandlers() {
       ${slideSections}
     </div>
   </div>
-  <script>${readModuleFile('reveal.js/dist/reveal.js')}</script>
+  <script>${readPackageFile('reveal.js', 'dist/reveal.js')}</script>
   <script>${getMermaidJs()}</script>
   <script>
     mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict' });

@@ -11,7 +11,11 @@ import remarkBreaks from 'remark-breaks';
 import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 import 'katex/dist/katex.min.css';
-import 'highlight.js/styles/github-dark.css';
+import { sincronizarTemaDoCodigo } from '../../utils/hljs-theme';
+
+// Tema do realce de codigo acompanha o tema do app (antes o escuro era
+// aplicado sempre, deixando o codigo ilegivel no modo claro).
+sincronizarTemaDoCodigo();
 import './preview.css';
 import { useShallow } from 'zustand/react/shallow';
 import { useVaultStore } from '../../store/vault.store';
@@ -281,19 +285,43 @@ export function Preview() {
           components: {
             pre: CustomPre,
             img: CustomImg,
+            // TODO link: nenhum clique pode navegar a janela.
+            // Antes, só http:// e https:// eram interceptados. Um link sem
+            // protocolo — [google](www.google.com), que é o que a pessoa
+            // escreve naturalmente — virava href relativo, o Electron navegava
+            // para file:///.../www.google.com, a pagina falhava e o app virava
+            // tela branca sem volta (o ErrorBoundary não pega: não é erro de
+            // render do React, é a janela saindo do app).
             a: (props: any) => {
               const href: string = props.href || '';
-              if (href.startsWith('http://') || href.startsWith('https://')) {
-                return <a {...props} onClick={(e: React.MouseEvent) => {
-                  e.preventDefault();
-                  if ((window as any).electron?.shell?.openExternal) {
-                    (window as any).electron.shell.openExternal(href);
-                  } else {
-                    window.open(href, '_blank', 'noopener,noreferrer');
-                  }
-                }} />;
-              }
-              return <a {...props} />;
+              const abrirFora = (url: string) => {
+                if ((window as any).electron?.shell?.openExternal) {
+                  (window as any).electron.shell.openExternal(url);
+                } else {
+                  window.open(url, '_blank', 'noopener,noreferrer');
+                }
+              };
+              return <a {...props} onClick={(e: React.MouseEvent) => {
+                // Sempre impede a navegação padrão; decidimos o destino aqui.
+                e.preventDefault();
+                if (!href) return;
+                if (/^https?:\/\//i.test(href)) { abrirFora(href); return; }
+                if (/^mailto:|^tel:/i.test(href)) { abrirFora(href); return; }
+                // Sem protocolo mas com cara de domínio (tem ponto e nada de
+                // espaço): assume http e abre no navegador do sistema.
+                if (/^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(href)) {
+                  abrirFora(`https://${href}`);
+                  return;
+                }
+                // Âncora interna da própria nota
+                if (href.startsWith('#')) {
+                  document.getElementById(href.slice(1))?.scrollIntoView({ behavior: 'smooth' });
+                  return;
+                }
+                // Qualquer outra coisa (caminho relativo, protocolo estranho):
+                // não navega. Melhor não fazer nada do que perder o app.
+                console.warn('[preview] link ignorado (destino nao suportado):', href);
+              }} />;
             },
             input: (props: any) => {
               if (props.type === 'checkbox') {

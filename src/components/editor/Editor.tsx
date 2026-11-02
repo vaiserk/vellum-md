@@ -117,30 +117,31 @@ export function Editor() {
       }
     });
 
+    // O Markdown nao aceita espaco antes do delimitador de fechamento:
+    // "**texto **" nao vira negrito. Como o duplo clique costuma levar o
+    // espaco junto, os espacos das pontas ficam fora dos marcadores.
+    const envolverSelecao = (view: EditorView, marca: string): boolean => {
+      const sel = view.state.selection.main;
+      const texto = view.state.doc.sliceString(sel.from, sel.to);
+      const miolo = texto.trim();
+      if (!miolo) return true; // selecao vazia ou so espacos: nao faz nada
+      const inicio = sel.from + (texto.length - texto.trimStart().length);
+      const fim = sel.to - (texto.length - texto.trimEnd().length);
+      view.dispatch({
+        changes: { from: inicio, to: fim, insert: `${marca}${miolo}${marca}` },
+        selection: { anchor: inicio + marca.length, head: inicio + marca.length + miolo.length }
+      });
+      return true;
+    };
+
     const vellumKeymap = keymap.of([
       {
         key: 'Ctrl-b',
-        run: (view) => {
-          const sel = view.state.selection.main;
-          const text = view.state.doc.sliceString(sel.from, sel.to);
-          view.dispatch({
-            changes: { from: sel.from, to: sel.to, insert: `**${text}**` },
-            selection: { anchor: sel.from + 2, head: sel.to + 2 }
-          });
-          return true;
-        }
+        run: (view) => envolverSelecao(view, '**')
       },
       {
         key: 'Ctrl-i',
-        run: (view) => {
-          const sel = view.state.selection.main;
-          const text = view.state.doc.sliceString(sel.from, sel.to);
-          view.dispatch({
-            changes: { from: sel.from, to: sel.to, insert: `*${text}*` },
-            selection: { anchor: sel.from + 1, head: sel.to + 1 }
-          });
-          return true;
-        }
+        run: (view) => envolverSelecao(view, '*')
       },
       {
         key: 'Ctrl-Shift-t',
