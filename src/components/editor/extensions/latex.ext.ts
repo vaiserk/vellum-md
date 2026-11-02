@@ -91,6 +91,15 @@ function buildDecorations(state: EditorState): DecorationSet {
       const to = from + m[0].length;
       if (blockRanges.some(([s, e]) => from >= s && to <= e)) continue;
       if (selection.from <= to && selection.to >= from) continue;
+
+      // Não renderiza dentro de linha de tabela. Quando o cursor entra numa
+      // tabela, o widget dela some e o código volta a ser editável — se as
+      // fórmulas continuassem renderizadas no meio dos pipes, a linha virava
+      // uma mistura ilegível de texto cru com matemática. Na pré-visualização
+      // da tabela as fórmulas aparecem normalmente.
+      const linha = state.doc.lineAt(from);
+      if (/^\s*\|/.test(linha.text)) continue;
+
       const tex = m[1].trim();
       if (tex) {
         specs.push({ from, to, widget: new InlineMathWidget(tex) });

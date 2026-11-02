@@ -1620,22 +1620,32 @@ button.slide-dot.active { background: var(--accent); transform: scale(1.4); }
   cursor: default;
   overflow-x: auto;
 }
+/* Espelha .markdown-preview table (preview.css): no modo dividido os dois
+   painéis mostram a MESMA tabela, então largura, espaçamento e tipografia
+   precisam bater. Antes o widget do editor saía estreito, do tamanho do
+   conteúdo, e a diferença entre os painéis saltava à vista. */
 .cm-table-widget table {
+  width: 100%;
   border-collapse: collapse;
+  margin: 1em 0;
   font-family: 'Inter', sans-serif;
   font-size: 0.9em;
   color: var(--text-primary);
+  table-layout: auto;
 }
 .cm-table-widget th,
 .cm-table-widget td {
   border: 1px solid var(--border-color);
-  padding: 6px 10px;
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+  word-break: break-word;
 }
 .cm-table-widget th {
   background: var(--sidebar-bg);
   font-weight: 600;
 }
-.cm-table-widget tbody tr:nth-child(even) {
+.cm-table-widget tr:nth-child(even) {
   background: rgba(128, 128, 128, 0.05);
 }
 .cm-table-widget code {

@@ -59,17 +59,36 @@ export function EditorToolbar() {
           selection: { anchor: selection.from, head: selection.from + innerText.length }
         });
       } else {
-        // O Markdown exige que o delimitador de fechamento NÃO venha precedido
-        // de espaço: "**texto **" simplesmente não vira negrito. Selecionar a
-        // palavra junto com o espaço seguinte (o que o duplo clique costuma
-        // fazer) produzia exatamente isso, e o botão parecia quebrado.
-        // Os espaços das pontas ficam de fora dos marcadores.
+        // SEM seleção: apenas insere o par de marcadores (ou o template, nos
+        // casos que só têm prefixo, como tabela e mermaid) e deixa o cursor
+        // no meio. É o caminho usado por código, LaTeX, tabela, link e
+        // imagem, que normalmente são acionados sem nada selecionado.
+        if (!text) {
+          editorView.dispatch({
+            changes: { from: selection.from, insert: prefix + suffix },
+            selection: { anchor: selection.from + prefix.length }
+          });
+          editorView.focus();
+          return;
+        }
+
+        // COM seleção: o Markdown exige que o delimitador de fechamento NÃO
+        // venha precedido de espaço — "**texto **" não vira negrito. Como o
+        // duplo clique costuma levar o espaço junto, os espaços das pontas
+        // ficam fora dos marcadores.
         const inicio = selection.from + (text.length - text.trimStart().length);
         const fim = selection.to - (text.length - text.trimEnd().length);
         const miolo = text.trim();
 
-        // Seleção só de espaços: não há o que formatar
-        if (!miolo) return;
+        // Seleção só de espaços: trata como se não houvesse seleção
+        if (!miolo) {
+          editorView.dispatch({
+            changes: { from: selection.from, to: selection.to, insert: prefix + suffix },
+            selection: { anchor: selection.from + prefix.length }
+          });
+          editorView.focus();
+          return;
+        }
 
         editorView.dispatch({
           changes: { from: inicio, to: fim, insert: prefix + miolo + suffix },

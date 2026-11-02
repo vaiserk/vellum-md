@@ -125,7 +125,15 @@ export function Editor() {
       const sel = view.state.selection.main;
       const texto = view.state.doc.sliceString(sel.from, sel.to);
       const miolo = texto.trim();
-      if (!miolo) return true; // selecao vazia ou so espacos: nao faz nada
+      // Sem selecao (ou so espacos): insere o par de marcadores e poe o
+      // cursor no meio, para a pessoa digitar ja formatado.
+      if (!miolo) {
+        view.dispatch({
+          changes: { from: sel.from, to: sel.to, insert: `${marca}${marca}` },
+          selection: { anchor: sel.from + marca.length }
+        });
+        return true;
+      }
       const inicio = sel.from + (texto.length - texto.trimStart().length);
       const fim = sel.to - (texto.length - texto.trimEnd().length);
       view.dispatch({
