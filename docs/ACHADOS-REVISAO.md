@@ -292,3 +292,63 @@ estática achou 31 defeitos reais, mas nenhum destes dois: eram comportamentos
 que só existem quando alguém clica. Vale registrar na defesa que as duas formas
 de verificação — leitura de código e uso real — pegam classes diferentes de
 problema.
+
+---
+
+## 10. Terceira rodada — preparação do Capítulo 4 (02/11, noite)
+
+Ao montar o vault de demonstração para as capturas de tela do capítulo de
+desenvolvimento, dois defeitos apareceram. Nenhum dos dois foi encontrado por
+teste: apareceram ao tentar **escrever Markdown normal** e ver o resultado.
+
+### Wikilink com apelido e com âncora
+
+O **RF11** promete wikilinks "incluindo apelidos e âncoras de seção". Quatro
+lugares do código liam wikilinks, e **cada um lia de um jeito**:
+
+| Lugar | `[[Nota]]` | `[[Nota\|apelido]]` / `[[Nota#seção]]` |
+|---|---|---|
+| Painel de backlinks | ok | ok — era o único correto |
+| Pré-visualização | ok | marcava como nota inexistente |
+| Editor | ok | marcava como nota inexistente |
+| Exportação de site | ok | o link sumia, virava texto cru |
+
+A causa era a mesma nos três: o miolo inteiro dos colchetes era usado como nome
+de arquivo. Nenhuma nota se chama `Nota|apelido`, então o link "não existia".
+
+**Correção:** `src/utils/wikilink.ts` passou a ser a fonte única (`parseWikilink`
+e `slugifyAnchor`), e os quatro lugares passaram a usá-la. O plugin de
+pré-visualização saiu do componente para `src/utils/remark-wikilinks.ts`, onde
+pode ser testado sem carregar KaTeX e Mermaid.
+
+A âncora exigiu uma peça que não existia: **títulos não tinham `id`**. Isso
+também explicava um trecho de código morto — o tratamento de link `#âncora` na
+pré-visualização nunca encontrava elemento nenhum. O novo
+`src/utils/rehype-heading-ids.ts` é compartilhado entre a pré-visualização e a
+exportação, para que o mesmo `[[Nota#Seção]]` caia no mesmo lugar nas duas
+saídas.
+
+### Imagem com caminho relativo
+
+`![](assets/foto.png)` nunca funcionou. A janela carrega de `dist/index.html`,
+então o caminho relativo era resolvido a partir da pasta do **aplicativo**, não
+do vault. A única forma que funcionava era `file:///C:/...` escrito à mão — que
+quebra assim que o vault muda de lugar.
+
+**Correção:** `src/utils/resolveAssetUrl` resolve o caminho contra a pasta da
+própria nota, como faz qualquer editor de Markdown. URLs com esquema (`http:`,
+`data:`, `file:`) seguem intocadas.
+
+### Testes
+
+De **99 para 113**. Os 14 novos cobrem os dois defeitos nos casos que os
+causaram, incluindo um teste que roda o pipeline real do Markdown e verifica o
+HTML produzido para `[[Nota#Seção|rótulo]]`.
+
+### O que isto diz sobre o método
+
+Os dois defeitos estavam em funcionalidades **declaradas como prontas** no
+Capítulo 3, e passaram por duas rodadas de revisão sem aparecer. O que os
+revelou foi escrever conteúdo real no aplicativo, em vez de testá-lo por partes
+— uma terceira forma de verificação, diferente tanto da leitura de código
+quanto do roteiro de testes manuais.
