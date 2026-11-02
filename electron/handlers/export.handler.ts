@@ -44,7 +44,7 @@ function getHljsCss(dark = false): string {
 }
 
 /** Escapa texto para uso seguro em HTML (títulos de notas podem conter <, & etc.). */
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return String(s)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -140,7 +140,7 @@ function buildPdfHtml(bodyContent: string): string {
   ${bodyContent}
   <script>${getMermaidJs()}</script>
   <script>
-    mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+    mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict' });
     window.__renderReady = (async function() {
       document.querySelectorAll('pre code.language-mermaid, pre code[class*="language-mermaid"]').forEach(function(el) {
         var div = document.createElement('div');
@@ -292,7 +292,7 @@ export function setupExportHandlers() {
   <script>${readModuleFile('reveal.js/dist/reveal.js')}</script>
   <script>${getMermaidJs()}</script>
   <script>
-    mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+    mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict' });
 
     Reveal.initialize({
       hash: true,
@@ -427,7 +427,7 @@ export function setupExportHandlers() {
   </div>
   <script src="assets/mermaid.min.js"></script>
   <script>
-    mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+    mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict' });
     document.querySelectorAll('pre code.language-mermaid').forEach(function(el) {
       var div = document.createElement('div');
       div.className = 'mermaid';

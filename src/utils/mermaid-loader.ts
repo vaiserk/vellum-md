@@ -23,13 +23,13 @@ export function getMermaid(): Promise<MermaidModule> {
   if (!_mermaidPromise) {
     _mermaidPromise = import('mermaid').then(({ default: mermaid }) => {
       _lastMermaidTheme = currentMermaidTheme();
-      mermaid.initialize({ startOnLoad: false, theme: _lastMermaidTheme, securityLevel: 'loose' });
+      mermaid.initialize({ startOnLoad: false, theme: _lastMermaidTheme, securityLevel: 'strict' });
       if (typeof MutationObserver !== 'undefined') {
         new MutationObserver(() => {
           const theme = currentMermaidTheme();
           if (theme === _lastMermaidTheme) return;
           _lastMermaidTheme = theme;
-          mermaid.initialize({ startOnLoad: false, theme, securityLevel: 'loose' });
+          mermaid.initialize({ startOnLoad: false, theme, securityLevel: 'strict' });
         }).observe(document.documentElement, {
           attributes: true, attributeFilter: ['data-theme'],
         });
