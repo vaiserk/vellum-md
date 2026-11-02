@@ -9,7 +9,10 @@ contextBridge.exposeInMainWorld('electron', {
     readDir: (vaultPath: string) => ipcRenderer.invoke('fs:readDir', vaultPath),
     readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
     writeFile: (filePath: string, content: string) => ipcRenderer.invoke('fs:writeFile', filePath, content),
-    createFile: (filePath: string) => ipcRenderer.invoke('fs:createFile', filePath),
+    // Sincrono — exclusivo do flush em beforeunload (ver Editor.tsx)
+    writeFileSync: (filePath: string, content: string): boolean =>
+      ipcRenderer.sendSync('fs:writeFileSync', filePath, content),
+    createFile: (filePath: string, content?: string) => ipcRenderer.invoke('fs:createFile', filePath, content),
     renameFile: (oldPath: string, newPath: string) => ipcRenderer.invoke('fs:renameFile', oldPath, newPath),
     deleteFile: (filePath: string, vaultPath?: string) => ipcRenderer.invoke('fs:deleteFile', filePath, vaultPath),
     restoreLastDeleted: (vaultPath: string) => ipcRenderer.invoke('fs:restoreLastDeleted', vaultPath),

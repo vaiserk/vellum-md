@@ -6,10 +6,11 @@ declare global {
       fs: {
         openVault: () => Promise<string | null>;
         getLastVault: () => Promise<string | null>;
+        writeFileSync: (filePath: string, content: string) => boolean;
         readDir: (vaultPath: string) => Promise<any[]>;
         readFile: (filePath: string) => Promise<string>;
         writeFile: (filePath: string, content: string) => Promise<boolean>;
-        createFile: (filePath: string) => Promise<boolean>;
+        createFile: (filePath: string, content?: string) => Promise<boolean>;
         renameFile: (oldPath: string, newPath: string) => Promise<boolean>;
         deleteFile: (filePath: string, vaultPath?: string) => Promise<boolean>;
         restoreLastDeleted: (vaultPath: string) => Promise<boolean>;

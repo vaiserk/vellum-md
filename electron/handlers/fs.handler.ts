@@ -144,12 +144,34 @@ export function setupFsHandlers(ipcMain: Electron.IpcMain, dialog: Electron.Dial
     return true;
   });
 
-  ipcMain.handle('fs:createFile', async (_, rawPath: string) => {
+  // Aceita o conteúdo já na criação. Sem isso, o chamador precisava criar o
+  // arquivo (para garantir atomicamente que não existe) e só depois gravar o
+  // conteúdo real num segundo IPC — deixando uma janela em que a nota existia
+  // vazia, com frontmatter errado.
+  ipcMain.handle('fs:createFile', async (_, rawPath: string, content?: string) => {
     const filePath = assertInVault(rawPath);
     if (fs.existsSync(filePath)) return false;
+    if (typeof content === 'string') {
+      fs.writeFileSync(filePath, content, 'utf-8');
+      return true;
+    }
     const frontmatter = `---\ntitle: "Nova Nota"\ncreated: ${new Date().toISOString()}\nmodified: ${new Date().toISOString()}\ntags: []\naliases: []\n---\n\n`;
     fs.writeFileSync(filePath, frontmatter, 'utf-8');
     return true;
+  });
+
+  // Gravação SÍNCRONA, usada só no fechamento da janela (beforeunload).
+  // Nesse momento o renderer está morrendo e uma gravação assíncrona não chega
+  // a completar — a última frase digitada se perderia. sendSync bloqueia o
+  // renderer até o disco responder, que é exatamente o que se quer aqui.
+  ipcMain.on('fs:writeFileSync', (event, filePath: string, content: string) => {
+    try {
+      fs.writeFileSync(assertInVault(filePath), content, 'utf-8');
+      event.returnValue = true;
+    } catch (e) {
+      console.error('writeFileSync error:', e);
+      event.returnValue = false;
+    }
   });
 
   ipcMain.handle('fs:renameFile', async (_, oldPath: string, newPath: string) => {

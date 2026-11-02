@@ -82,6 +82,8 @@ interface VaultState {
   fileContents: Map<string, string>;
   embeddingStatus: EmbeddingStatus;
   embeddingError: string | null;
+  /** Incrementado a cada troca de vault; invalida indexações em andamento. */
+  vaultGeneration: number;
   indexingProgress: { current: number; total: number };
 
 
@@ -137,11 +139,40 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   fileContents: new Map(),
   embeddingStatus: 'idle',
   embeddingError: null,
+  vaultGeneration: 0,
   indexingProgress: { current: 0, total: 0 },
 
   setNewNoteModalOpen: (open) => set({ newNoteModalOpen: open }),
   setLastDeleted: (info) => set({ lastDeleted: info }),
-  setVaultPath: (path) => set({ vaultPath: path }),
+  // Trocar de vault precisa zerar TUDO que pertence ao vault anterior. Sem
+  // isso, a nota antiga continuava aberta e o auto-save seguia gravando nela
+  // (o usuário pensava estar escrevendo no vault novo), a busca devolvia
+  // resultados do vault antigo e as tags antigas apareciam até a reindexação
+  // terminar. O contador de geração invalida indexações em voo: um
+  // buildEmbeddingIndex iniciado no vault anterior descarta o próprio
+  // resultado em vez de gravá-lo por cima do novo.
+  setVaultPath: (path) => {
+    const atual = get().vaultPath;
+    if (atual === path) {
+      set({ vaultPath: path });
+      return;
+    }
+    set({
+      vaultPath: path,
+      vaultGeneration: get().vaultGeneration + 1,
+      activeFile: null,
+      activeContent: '',
+      editorView: null,
+      embeddingIndex: new Map(),
+      passageIndex: new Map(),
+      tagIndex: new Map(),
+      fileContents: new Map(),
+      embeddingStatus: 'idle',
+      embeddingError: null,
+      indexingProgress: { current: 0, total: 0 },
+      lastDeleted: null,
+    });
+  },
   setFiles: (files) => set({ files }),
   setActiveFile: (path, content = '') => set({ activeFile: path, activeContent: content }),
   setActiveContent: (content) => set({ activeContent: content }),
@@ -212,6 +243,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   loadTagsOnly: async () => {
     const { vaultPath, files } = get();
     if (!vaultPath) return;
+    const geracao = get().vaultGeneration;
 
     const mdFiles = flattenFiles(files).filter(f => f.name.endsWith('.md'));
     const tagIndex = new Map<string, string[]>();
@@ -228,11 +260,15 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       }
     }
 
+    if (get().vaultGeneration !== geracao) return; // vault trocou no meio
     set({ tagIndex, fileContents });
   },
 
   buildEmbeddingIndex: async () => {
     const { vaultPath, files, embeddingStatus } = get();
+    // Geração no início: se o usuário trocar de vault durante a indexação,
+    // o resultado é descartado em vez de sobrescrever o índice do vault novo.
+    const geracao = get().vaultGeneration;
     const settings = useSettingsStore.getState();
     const effectiveKey = settings.getEmbeddingKey();
 
@@ -378,6 +414,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       };
       await window.electron.fs.writeEmbeddingCache(vaultPath, updatedCache);
 
+      if (get().vaultGeneration !== geracao) return; // vault trocou no meio
       set({ embeddingIndex, passageIndex, tagIndex, fileContents, embeddingStatus: 'ready' });
     } catch (e) {
       console.error('buildEmbeddingIndex error:', e);

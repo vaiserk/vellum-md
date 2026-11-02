@@ -17,6 +17,34 @@ import { latexInlinePreview } from './extensions/latex.ext';
 import { mermaidInlinePreview } from './extensions/mermaid.ext';
 
 export function Editor() {
+  // O editor só pode gravar notas. A árvore de arquivos também lista imagens
+  // (png/jpg/gif/svg/webp) e, ao abrir uma, o editor recebe um embed markdown;
+  // sem esta guarda, qualquer tecla digitada agendava um auto-save que
+  // SOBRESCREVIA o arquivo de imagem com texto.
+  const gravavel = (caminho: string | null | undefined): caminho is string =>
+    !!caminho && /\.(md|txt)$/i.test(caminho);
+
+  // Flush ao fechar a janela.
+  // O auto-save é debounced (200–2000 ms). Fechar o app NÃO desmonta o React,
+  // então o cleanup do efeito do editor — que já faz flush ao trocar de nota —
+  // nunca roda, e o timeout pendente era simplesmente descartado: a última
+  // frase digitada se perdia em silêncio. A gravação precisa ser síncrona,
+  // porque em beforeunload uma Promise não chega a resolver.
+  useEffect(() => {
+    const aoFechar = () => {
+      const pendente = pendenteRef.current;
+      if (!pendente) return;
+      try {
+        window.electron.fs.writeFileSync(pendente.file, pendente.content);
+        pendenteRef.current = null;
+      } catch {
+        /* nada a fazer: a janela está fechando */
+      }
+    };
+    window.addEventListener('beforeunload', aoFechar);
+    return () => window.removeEventListener('beforeunload', aoFechar);
+  }, []);
+
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView>();
   const lineNumbersCompartment = useRef(new Compartment());
@@ -32,6 +60,8 @@ export function Editor() {
     showLineNumbers: s.showLineNumbers, autoSaveDelay: s.autoSaveDelay,
   })));
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
+  /** Última edição ainda não gravada em disco — usada no flush ao fechar. */
+  const pendenteRef = useRef<{ file: string; content: string } | null>(null);
 
   // Refs let the auto-save closure always see the latest values without
   // being included in the editor setup effect's dependency array.
@@ -59,11 +89,19 @@ export function Editor() {
         setSaveStatus('saving');
 
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        if (gravavel(fileForThisEditor)) pendenteRef.current = { file: fileForThisEditor, content };
         saveTimeoutRef.current = setTimeout(async () => {
+          // Zera a ref ANTES de gravar: sem isso ela guardava o id de um
+          // timeout já disparado, e o cleanup do efeito regravava o arquivo a
+          // cada troca de nota. Isso mudava o mtime sem alteração real, o que
+          // invalidava a entrada no cache de embeddings e fazia a nota ser
+          // reembedada (custo de API) só por ter sido visitada.
+          saveTimeoutRef.current = undefined;
           const file = activeFileRef.current;
-          if (file) {
+          if (gravavel(file)) {
             try {
               await window.electron.fs.writeFile(file, content);
+              pendenteRef.current = null;
               setSaveStatus('saved');
             } catch {
               setSaveStatus('error');
@@ -113,26 +151,18 @@ export function Editor() {
           return true;
         }
       },
-      {
-        key: 'Ctrl-\\',
-        run: () => {
-          useVaultStore.getState().cycleLayoutMode();
-          return true;
-        }
-      },
-      {
-        key: 'Ctrl-p',
-        run: () => {
-          useVaultStore.getState().setCommandPaletteOpen(true);
-          return true;
-        }
-      },
+      // Ctrl+\ e Ctrl+P NÃO são registrados aqui de propósito.
+      // O CodeMirror só interrompe a propagação do evento quando o binding
+      // declara stopPropagation: true. Sem isso, a tecla era tratada aqui E
+      // subia até o listener global de App.tsx, alternando o layout DUAS vezes
+      // por toque — o modo "editor" ficava inalcançável pelo atalho. O handler
+      // global já cobre o editor, então basta ele.
       {
         key: 'Ctrl-s',
         run: (view) => {
           const content = view.state.doc.toString();
           const file = activeFileRef.current;
-          if (file) {
+          if (gravavel(file)) {
             setSaveStatus('saving');
             window.electron.fs.writeFile(file, content)
               .then(() => setSaveStatus('saved'))
@@ -203,7 +233,7 @@ export function Editor() {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = undefined;
-        if (fileForThisEditor) {
+        if (gravavel(fileForThisEditor)) {
           const content = view.state.doc.toString();
           window.electron.fs.writeFile(fileForThisEditor, content)
             .then(() => setSaveStatus('saved'))

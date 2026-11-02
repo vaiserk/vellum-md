@@ -123,9 +123,14 @@ export function splitIntoPassages(content: string, maxLen = 350): string[] {
 }
 
 export function extractTags(content: string): string[] {
-  const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+  // Aceita CRLF: o conteúdo vem cru de fs:readFile, e vaults criados no Windows
+  // (Obsidian, Bloco de Notas, git com core.autocrlf) usam \r\n. Sem o \r? o
+  // frontmatter nunca casava e a aba Tags ficava permanentemente vazia, mesmo
+  // com `tags: [...]` escrito na nota.
+  const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!frontmatterMatch) return [];
-  const fm = frontmatterMatch[1];
+  // Normaliza as quebras só para a análise do bloco, sem tocar no arquivo
+  const fm = frontmatterMatch[1].replace(/\r\n/g, '\n');
 
   // Inline array: tags: [a, b, c]
   const inlineMatch = fm.match(/^tags:\s*\[([^\]]*)\]/m);
