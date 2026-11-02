@@ -21,6 +21,10 @@ import { useShallow } from 'zustand/react/shallow';
 import { useVaultStore } from '../../store/vault.store';
 import { visit } from 'unist-util-visit';
 import { buildKnownNotes } from '../../utils/files';
+import { slugifyAnchor } from '../../utils/wikilink';
+import { remarkWikilinks } from '../../utils/remark-wikilinks';
+import { rehypeHeadingIds } from '../../utils/rehype-heading-ids';
+import { resolveAssetUrl } from '../../utils/asset-url';
 import { useDebouncedValue } from '../../utils/useDebouncedValue';
 // Loader lazy compartilhado com a extensão inline do editor — mesma instância
 // e mesma fila de renderização (o Mermaid é singleton; ver utils/mermaid-loader.ts)
@@ -107,9 +111,11 @@ function CustomPre({ children, ...props }: any) {
 // voltava — a imagem externa só aparecia ao reabrir a nota (remontagem), que é
 // exatamente o sintoma relatado. Comparando a url que falhou com a url atual, a
 // imagem se recupera sozinha no instante em que o endereço fica completo.
-function CustomImg({ src, alt, ...props }: any) {
+function CustomImg({ src, alt, notePath, ...props }: any) {
   const [urlQueFalhou, setUrlQueFalhou] = React.useState<string | null>(null);
-  const url = typeof src === 'string' ? src.trim() : '';
+  // Caminho relativo (`assets/foto.png`) é resolvido contra a pasta da nota.
+  // Sem isto ele era resolvido contra dist/, e nenhuma imagem local aparecia.
+  const url = typeof src === 'string' ? resolveAssetUrl(src, notePath) : '';
 
   // src vazio (parêntese recém-fechado) ou esquema pela metade: a pessoa ainda
   // está digitando. Não renderiza <img> nenhum — evita um pedido de rede inútil
@@ -136,30 +142,6 @@ function CustomImg({ src, alt, ...props }: any) {
       style={{ maxWidth: '100%', borderRadius: '8px', margin: '1em 0', display: 'block' }}
       onError={() => setUrlQueFalhou(url)} />
   );
-}
-
-function remarkWikilinks() {
-  return (tree: any) => {
-    visit(tree, 'text', (node: any, index, parent) => {
-      if (!parent || !node.value) return;
-      const regex = /\[\[([^\]]+)\]\]/g;
-      const matches = [...node.value.matchAll(regex)];
-      if (matches.length === 0) return;
-      const children = [];
-      let lastIndex = 0;
-      for (const match of matches) {
-        if (match.index > lastIndex) children.push({ type: 'text', value: node.value.slice(lastIndex, match.index) });
-        children.push({
-          type: 'element',
-          data: { hName: 'span', hProperties: { className: 'wikilink', 'data-note': match[1] } },
-          children: [{ type: 'text', value: match[1] }]
-        });
-        lastIndex = match.index + match[0].length;
-      }
-      if (lastIndex < node.value.length) children.push({ type: 'text', value: node.value.slice(lastIndex) });
-      parent.children.splice(index, 1, ...children);
-    });
-  };
 }
 
 function remarkCallouts() {
@@ -227,6 +209,50 @@ export function Preview() {
   const previewRef = useRef<HTMLDivElement>(null);
   const syncSourceRef = useRef<'editor' | 'preview' | null>(null);
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // ── Âncora de seção (`[[Nota#Seção]]`) ──────────────────────────────────────
+  // O clique no wikilink só PEDE a abertura da nota; quem abre é o tratador do
+  // evento, de forma assíncrona. Rolar na hora levaria à seção da nota ANTIGA,
+  // que ainda está na tela. Por isso a âncora fica pendente, junto do nome da
+  // nota esperada, e só é consumida quando essa nota é de fato a ativa.
+  const [ancoraPendente, setAncoraPendente] = useState<{ nota: string; ancora: string } | null>(null);
+
+  useEffect(() => {
+    const aoAbrirNota = (e: any) => {
+      const ancora = e.detail?.anchor;
+      if (ancora) setAncoraPendente({ nota: (e.detail?.name || '').trim(), ancora });
+    };
+    window.addEventListener('vellum:open-note', aoAbrirNota);
+    return () => window.removeEventListener('vellum:open-note', aoAbrirNota);
+  }, []);
+
+  useEffect(() => {
+    if (!ancoraPendente) return;
+
+    const notaAtual = (activeFile?.split(/[/\\]/).pop() ?? '').replace(/\.md$/i, '');
+    // Sem nome => âncora da própria nota (`[[#Seção]]`), rola já.
+    const chegou = !ancoraPendente.nota
+      || notaAtual.toLowerCase() === ancoraPendente.nota.toLowerCase();
+
+    if (!chegou) {
+      // A nota pode nunca abrir (não existe, ou o usuário recusou criá-la).
+      // Sem este descarte, a âncora ficaria guardada e dispararia numa
+      // navegação futura, sem relação nenhuma com o clique.
+      const desistir = setTimeout(() => setAncoraPendente(null), 3000);
+      return () => clearTimeout(desistir);
+    }
+
+    const id = requestAnimationFrame(() => {
+      const slug = slugifyAnchor(ancoraPendente.ancora);
+      if (slug) {
+        previewRef.current
+          ?.querySelector(`#${CSS.escape(slug)}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      setAncoraPendente(null);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [ancoraPendente, previewContent, activeFile]);
 
   // Scroll sync: editor.scrollDOM ↔ .preview-pane (parentElement of previewRef)
   useEffect(() => {
@@ -296,12 +322,13 @@ export function Preview() {
         .use(remarkRehype, { allowDangerousHtml: true })
         .use(rehypeKatex)
         .use(rehypeHighlight)
+        .use(rehypeHeadingIds)
         .use(rehypeTaskCheckboxIndex)
         .use(rehypeReact, {
           ...{ Fragment: prod.Fragment, jsx: prod.jsx, jsxs: prod.jsxs },
           components: {
             pre: CustomPre,
-            img: CustomImg,
+            img: (props: any) => <CustomImg {...props} notePath={activeFile} />,
             // TODO link: nenhum clique pode navegar a janela.
             // Antes, só http:// e https:// eram interceptados. Um link sem
             // protocolo — [google](www.google.com), que é o que a pessoa
@@ -351,14 +378,22 @@ export function Preview() {
             span: (props: any) => {
               if (props.className === 'wikilink') {
                 const noteName: string = props['data-note'] || '';
-                const exists = knownNotes.has(noteName.toLowerCase());
+                const anchor: string | undefined = props['data-anchor'];
+                // `[[#Seção]]` aponta para a própria nota: não há alvo a procurar
+                const mesmaNota = !noteName;
+                const exists = mesmaNota || knownNotes.has(noteName.toLowerCase());
+                const destino = anchor ? `${noteName || 'esta nota'} › ${anchor}` : noteName;
                 return (
                   <span
                     {...props}
                     className={exists ? 'wikilink' : 'wikilink-missing'}
-                    title={exists ? `Abrir: ${noteName}` : `Nota não encontrada: ${noteName}`}
+                    title={exists ? `Abrir: ${destino}` : `Nota não encontrada: ${noteName}`}
                     onClick={() => {
-                      if (noteName) window.dispatchEvent(new CustomEvent('vellum:open-note', { detail: { name: noteName } }));
+                      // Mesmo inexistente o evento é disparado: quem trata
+                      // oferece criar a nota, e esse caminho tem que continuar.
+                      window.dispatchEvent(new CustomEvent('vellum:open-note', {
+                        detail: { name: noteName, anchor: anchor ?? null },
+                      }));
                     }}
                   >
                     {props.children}
@@ -375,7 +410,10 @@ export function Preview() {
       console.error(e);
       return <div>Error rendering preview</div>;
     }
-  }, [previewContent, theme, toggleCheckbox, knownNotes]);
+    // activeFile entra nas dependências porque é a base dos caminhos relativos
+    // de imagem: duas notas com o mesmo conteúdo em pastas diferentes precisam
+    // resolver a imagem para lugares diferentes.
+  }, [previewContent, theme, toggleCheckbox, knownNotes, activeFile]);
 
   return (
     <div ref={previewRef} className="markdown-preview">

@@ -12,6 +12,8 @@ import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeStringify from 'rehype-stringify';
 import { visit } from 'unist-util-visit';
+import { parseWikilink, slugifyAnchor } from '../../utils/wikilink';
+import { rehypeHeadingIds } from '../../utils/rehype-heading-ids';
 import { SlideEditorModal } from './SlideEditorModal';
 
 type ExportTab = 'pdf' | 'slides' | 'site';
@@ -58,13 +60,23 @@ function makeWikilinkPlugin(slugMap: Record<string, string>) {
           if (match.index > lastIndex) {
             children.push({ type: 'text', value: node.value.slice(lastIndex, match.index) });
           }
-          const noteName = match[1].trim();
-          const slug = slugMap[noteName.toLowerCase()];
+          // `[[Nota#Seção|rótulo]]`: o arquivo é "Nota"; a seção vira âncora do
+          // HTML e o rótulo, o texto do link. Antes o miolo inteiro era
+          // procurado no mapa de slugs, não era encontrado, e o link saía do
+          // site exportado como texto cru entre colchetes.
+          const { target, anchor, label } = parseWikilink(match[1]);
+          const slug = slugMap[target.toLowerCase()];
           if (slug) {
             children.push({
               type: 'element',
-              data: { hName: 'a', hProperties: { href: `${slug}.html`, className: 'wiki-link' } },
-              children: [{ type: 'text', value: noteName }],
+              data: {
+                hName: 'a',
+                hProperties: {
+                  href: `${slug}.html${anchor ? `#${slugifyAnchor(anchor)}` : ''}`,
+                  className: 'wiki-link',
+                },
+              },
+              children: [{ type: 'text', value: label }],
             });
           } else {
             children.push({ type: 'text', value: match[0] });
@@ -93,6 +105,9 @@ async function mdToHtml(markdown: string, extraPlugin?: () => any): Promise<stri
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeKatex)
     .use(rehypeHighlight)
+    // Sem id nos títulos, a âncora de `[[Nota#Seção]]` apontaria para o nada
+    // no site exportado.
+    .use(rehypeHeadingIds)
     .use(rehypeStringify);
   const file = await proc.process(markdown);
   return String(file);

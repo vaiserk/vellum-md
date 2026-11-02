@@ -2,19 +2,22 @@ import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useVaultStore } from '../../store/vault.store';
 import { flattenFiles } from '../../utils/files';
+import { parseWikilink } from '../../utils/wikilink';
 import { openNote } from '../../utils/openNote';
 
 const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
 
 // Verifica se algum [[Wikilink]] do conteúdo aponta para `targetName`,
-// suportando aliases ([[Nota|texto]]) e âncoras de seção ([[Nota#secao]]).
+// suportando apelidos ([[Nota|texto]]) e âncoras de seção ([[Nota#secao]]).
+// A separação em si vem de utils/wikilink: este painel era o único lugar que
+// fazia certo, e manter a regra aqui dentro foi o que permitiu que os outros
+// três leitores de wikilink divergissem sem que ninguém notasse.
 function referencesNote(content: string, targetName: string): boolean {
   const target = targetName.toLowerCase();
   WIKILINK_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = WIKILINK_RE.exec(content)) !== null) {
-    const noteName = match[1].split('|')[0].split('#')[0].trim().toLowerCase();
-    if (noteName === target) return true;
+    if (parseWikilink(match[1]).target.toLowerCase() === target) return true;
   }
   return false;
 }

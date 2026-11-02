@@ -6,6 +6,7 @@ import {
 } from '@codemirror/view';
 import { RangeSetBuilder } from '@codemirror/state';
 import { useVaultStore } from '../../../store/vault.store';
+import { parseWikilink } from '../../../utils/wikilink';
 
 const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
 
@@ -37,8 +38,13 @@ function buildDecorations(view: EditorView): DecorationSet {
     WIKILINK_RE.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = WIKILINK_RE.exec(text)) !== null) {
-      const noteName = match[1];
-      const exists = knownNotes.has(noteName.toLowerCase());
+      // `[[Nota#Seção|rótulo]]`: só "Nota" é nome de arquivo. Antes o miolo
+      // inteiro era comparado com a lista de notas e o link saía riscado como
+      // inexistente — mesma divergência que havia na pré-visualização.
+      const { target, anchor } = parseWikilink(match[1]);
+      const mesmaNota = !target;
+      const exists = mesmaNota || knownNotes.has(target.toLowerCase());
+      const destino = anchor ? `${target || 'esta nota'} › ${anchor}` : target;
       builder.add(
         from + match.index,
         from + match.index + match[0].length,
@@ -46,9 +52,10 @@ function buildDecorations(view: EditorView): DecorationSet {
           class: exists ? 'cm-wikilink' : 'cm-wikilink-broken',
           attributes: {
             title: exists
-              ? `Ctrl+Click para abrir: ${noteName}`
-              : `Nota não encontrada: ${noteName}`,
-            'data-wikilink': noteName,
+              ? `Ctrl+Click para abrir: ${destino}`
+              : `Nota não encontrada: ${target}`,
+            'data-wikilink': target,
+            ...(anchor ? { 'data-wikianchor': anchor } : {}),
           },
         })
       );
@@ -78,8 +85,11 @@ export const wikilinkHighlighter = ViewPlugin.fromClass(
         if (event.ctrlKey && wikilink) {
           event.preventDefault();
           const noteName = wikilink.getAttribute('data-wikilink');
-          if (noteName) {
-            window.dispatchEvent(new CustomEvent('vellum:open-note', { detail: { name: noteName } }));
+          const anchor = wikilink.getAttribute('data-wikianchor');
+          if (noteName || anchor) {
+            window.dispatchEvent(new CustomEvent('vellum:open-note', {
+              detail: { name: noteName ?? '', anchor },
+            }));
           }
         }
       },
