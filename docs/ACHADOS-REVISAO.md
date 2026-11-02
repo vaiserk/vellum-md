@@ -193,3 +193,46 @@ do Escape no editor de slides (comportamento correto) · `useDebouncedValue` com
    funcional (varredura manual), sem estudo com participantes.
 4. **Ampliar a cobertura de testes** para os componentes de interface (hoje só
    lógica pura está coberta).
+
+---
+
+## 8. Empacotamento e versão (02/11, parte final)
+
+| Item | Resultado |
+|---|---|
+| Instalador | `release/VellumMD Setup 1.0.0.exe` — 104 MB, NSIS, x64 |
+| Metadados do executável | ProductName `VellumMD` · FileVersion `1.0.0` · Company `Otavio Freitas dos Santos` |
+| Ícone | **Não existia** — criado em 7 tamanhos (16–256) e embutido no `.exe`, no instalador e no desinstalador |
+| App empacotado | Executado em **perfil limpo** (`--user-data-dir`): abriu, indexou, renderizou editor, preview, callout e painel de IA, **console sem erros** |
+| Versão | `git tag v1.0.0` publicado |
+| Testes | 46 (41 de lógica pura + 5 de componente do ErrorBoundary em jsdom) |
+
+### Obstáculo encontrado no empacotamento
+
+`npm run build` falhou duas vezes. O electron-builder baixa o pacote
+`winCodeSign`, que contém **symlinks do macOS** (`libcrypto.dylib`,
+`libssl.dylib`); o Windows recusa criá-los sem privilégio elevado, e o
+*Developer Mode* está desativado na máquina. Havia **13 extrações falhas
+acumuladas** no cache, de tentativas anteriores.
+
+**Solução aplicada:** extração manual do pacote com `7za x -xr!darwin`, ignorando
+a pasta macOS (irrelevante no Windows), no diretório com o nome que o
+electron-builder espera (`winCodeSign-2.6.0`), e limpeza das 13 pastas órfãs.
+Nenhuma configuração do sistema operacional foi alterada. O `rcedit` — que
+aplica ícone e metadados ao executável — está nesse mesmo pacote, por isso
+desabilitar a assinatura não era alternativa: custaria o ícone.
+
+> **Para reproduzir o build noutra máquina Windows:** se o erro de symlink
+> voltar, ou ativa-se o Developer Mode, ou repete-se a extração manual acima.
+
+### Pendência restante
+
+- [ ] **Percorrer o caminho feliz no app instalado** (não apenas no empacotado):
+      rodar `VellumMD Setup 1.0.0.exe`, instalar e refazer onboarding → vault →
+      nota → busca → exportar. O app *empacotado* (`win-unpacked`) foi validado;
+      o *instalado* não, para não alterar a máquina sem necessidade.
+
+### Campo em aberto
+
+`license` no `package.json` está vazio. Pelo Business Model Canvas o projeto é
+de código aberto, mas a escolha da licença é decisão do autor.

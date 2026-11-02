@@ -80,7 +80,7 @@ fica branca e não há volta.**
 - [x] Criar um _error boundary_ React em volta do app
 - [x] Mostrar mensagem legível + botão "Recarregar" em vez da tela branca
 - [x] Registrar o erro no console para diagnóstico
-- [ ] **Testar de propósito:** forçar um erro e conferir que a tela de recuperação aparece
+- [x] **Testar de propósito:** forçar um erro e conferir que a tela de recuperação aparece
 
 ### Bloco 3 — Segurança (2 h)
 
@@ -267,17 +267,17 @@ item de "verificação e validação" defensável na defesa.
 
 ### Bloco 3 — Empacotamento (1 h)
 
-- [ ] `npm run build` → instalador em `release/`
-- [ ] **Instalar numa máquina limpa** (ou com perfil novo: `--user-data-dir`)
+- [x] `npm run build` → instalador em `release/`
+- [x] **Instalar numa máquina limpa** (ou com perfil novo: `--user-data-dir`)
 - [ ] Percorrer o caminho feliz no app instalado: onboarding → vault → nota → busca → exportar
-- [ ] Conferir ícone, nome e versão do aplicativo
+- [x] Conferir ícone, nome e versão do aplicativo
 
 ### Bloco 4 — Fechamento (30 min)
 
 - [x] Atualizar `RELATORIO-MELHORIAS.md` com o que foi resolvido
-- [ ] Atualizar a documentação de arquitetura, se algo mudou
+- [x] Atualizar a documentação de arquitetura, se algo mudou
 - [x] Push final
-- [ ] **Marcar a versão:** `git tag v1.0.0`
+- [x] **Marcar a versão:** `git tag v1.0.0`
 
 ---
 
