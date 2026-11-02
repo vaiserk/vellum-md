@@ -4,7 +4,8 @@ import { useVaultStore, FileNode } from '../../store/vault.store';
 import { useSettingsStore } from '../../store/settings.store';
 import { FileTree } from './FileTree';
 import { BacklinksPane } from './BacklinksPane';
-import { Sun, Moon, FilePlus, Settings } from 'lucide-react';
+import { Sun, Moon, FilePlus, Settings, Trash2 } from 'lucide-react';
+import { TrashModal } from '../modals/TrashModal';
 import { EmbeddingService } from '../../services/embedding.service';
 import { topKSimilar, cosineSimilarity } from '../../services/similarity';
 import { flattenFiles } from '../../utils/files';
@@ -53,6 +54,8 @@ export function Sidebar() {
     }))
   );
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
+  // Painel da lixeira: estado local, o modal só existe enquanto está aberto
+  const [lixeiraAberta, setLixeiraAberta] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [semanticResults, setSemanticResults] = useState<SemanticResult[]>([]);
   const [semanticLoading, setSemanticLoading] = useState(false);
@@ -226,6 +229,11 @@ export function Sidebar() {
               <FilePlus size={14} />
             </button>
           )}
+          {vaultPath && (
+            <button onClick={() => setLixeiraAberta(true)} title="Lixeira" style={{ padding: '4px 6px', background: 'transparent', color: 'var(--text-primary)' }}>
+              <Trash2 size={14} />
+            </button>
+          )}
           <button onClick={() => setSettingsOpen(true)} title="Configurações (Ctrl+,)" style={{ padding: '4px 6px', background: 'transparent', color: 'var(--text-primary)' }}>
             <Settings size={14} />
           </button>
@@ -384,6 +392,8 @@ export function Sidebar() {
 
         {activeTab === 'backlinks' && <BacklinksPane />}
       </div>
+
+      {lixeiraAberta && <TrashModal onFechar={() => setLixeiraAberta(false)} />}
     </div>
   );
 }

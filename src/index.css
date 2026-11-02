@@ -1612,6 +1612,40 @@ button.slide-dot.active { background: var(--accent); transform: scale(1.4); }
   height: auto;
 }
 
+/* Tabela renderizada dentro do editor (table.ext.ts).
+   Mesmas variáveis de tema do preview, então segue claro/escuro. */
+.cm-table-widget {
+  display: block;
+  padding: 8px 0;
+  cursor: default;
+  overflow-x: auto;
+}
+.cm-table-widget table {
+  border-collapse: collapse;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9em;
+  color: var(--text-primary);
+}
+.cm-table-widget th,
+.cm-table-widget td {
+  border: 1px solid var(--border-color);
+  padding: 6px 10px;
+}
+.cm-table-widget th {
+  background: var(--sidebar-bg);
+  font-weight: 600;
+}
+.cm-table-widget tbody tr:nth-child(even) {
+  background: rgba(128, 128, 128, 0.05);
+}
+.cm-table-widget code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85em;
+  background: var(--sidebar-bg);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
 /* ===== Global Focus Rings ===== */
 input:focus-visible,
 textarea:focus-visible,
@@ -1743,3 +1777,99 @@ button.ai-preview-cancel {
   cursor: pointer;
 }
 button.ai-preview-cancel:hover { background: var(--border-color); color: var(--text-primary); }
+
+/* ===== Lixeira ===== */
+.trash-empty {
+  padding: 16px 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.trash-error {
+  font-size: 12px;
+  color: #e06c75;
+  background: rgba(224, 108, 117, 0.1);
+  border: 1px solid rgba(224, 108, 117, 0.3);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+.trash-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border-color);
+}
+.trash-item:last-child { border-bottom: none; }
+.trash-item-info {
+  min-width: 0;
+  flex: 1;
+}
+.trash-item-name {
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trash-item-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+button.trash-restore-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 4px 10px;
+}
+button.trash-restore-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ===== Seletor de pasta de destino ===== */
+.folder-picker-title {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.folder-picker-item .command-label {
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.folder-picker-item--atual {
+  color: var(--text-secondary);
+  cursor: default;
+}
+.folder-picker-item--atual:hover {
+  background: transparent;
+}
+
+/* Seletor de pasta da Nova Nota */
+.destino-select {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--editor-bg);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+}
+.destino-select:focus {
+  border-color: var(--accent);
+}

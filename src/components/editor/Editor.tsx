@@ -15,6 +15,7 @@ import { slashCommandsExtension } from './extensions/slash-commands.ext';
 import { aiContextMenuExtension } from './extensions/ai-context-menu.ext';
 import { latexInlinePreview } from './extensions/latex.ext';
 import { mermaidInlinePreview } from './extensions/mermaid.ext';
+import { tableInlinePreview } from './extensions/table.ext';
 
 export function Editor() {
   // O editor só pode gravar notas. A árvore de arquivos também lista imagens
@@ -210,12 +211,13 @@ export function Editor() {
         EditorView.lineWrapping,
         EditorView.contentAttributes.of({ spellcheck: 'true' }),
         wikilinkHighlighter,
-        // Preview inline de LaTeX e Mermaid no próprio editor (fora do cursor):
-        // fórmulas e diagramas renderizam no lugar do código-fonte; clicar no
-        // widget devolve o código editável. Cumpre o requisito do projeto de
-        // renderização "diretamente no editor".
+        // Preview inline de LaTeX, Mermaid e tabelas no próprio editor (fora do
+        // cursor): fórmulas, diagramas e tabelas renderizam no lugar do
+        // código-fonte; clicar no widget devolve o código editável. Cumpre o
+        // requisito do projeto de renderização "diretamente no editor".
         latexInlinePreview,
         mermaidInlinePreview,
+        tableInlinePreview,
         ...typewriterExtension,
         slashCommandsExtension,
         aiContextMenuExtension,

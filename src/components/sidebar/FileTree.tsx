@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useVaultStore, FileNode } from '../../store/vault.store';
 import { File, Folder, FolderOpen, ChevronRight, ChevronDown, FilePlus } from 'lucide-react';
 import { openNote } from '../../utils/openNote';
+import { FolderPickerModal, juntarCaminho, pastaDe } from '../modals/FolderPicker';
 
 /** Escapa um nome de nota para uso dentro de uma RegExp. */
 function escapeRegExp(s: string): string {
@@ -11,12 +12,14 @@ function escapeRegExp(s: string): string {
 
 export function FileTree() {
   // useShallow: não re-renderiza a árvore a cada tecla digitada no editor
-  const { files, activeFile, setActiveFile, setNewNoteModalOpen } = useVaultStore(useShallow(s => ({
-    files: s.files, activeFile: s.activeFile, setActiveFile: s.setActiveFile,
+  const { files, vaultPath, activeFile, setActiveFile, setNewNoteModalOpen } = useVaultStore(useShallow(s => ({
+    files: s.files, vaultPath: s.vaultPath, activeFile: s.activeFile, setActiveFile: s.setActiveFile,
     setNewNoteModalOpen: s.setNewNoteModalOpen,
   })));
 
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, file: FileNode } | null>(null);
+  // Nota aguardando escolha da pasta de destino ("Mover para…")
+  const [moverAlvo, setMoverAlvo] = useState<FileNode | null>(null);
   // Pastas abertas (por path). Vazio = tudo colapsado.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const menuRef = useRef<HTMLDivElement>(null);
@@ -148,6 +151,50 @@ export function FileTree() {
     }
   };
 
+  // "Mover para…": só o seletor abre aqui; o move acontece em handleEscolherPasta.
+  // O menu de contexto fecha primeiro, senão o modal abre atrás dele.
+  const handleMover = () => {
+    if (!contextMenu) return;
+    const { file } = contextMenu;
+    setContextMenu(null);
+    setMoverAlvo(file);
+  };
+
+  const handleEscolherPasta = async (pastaDestino: string) => {
+    const file = moverAlvo;
+    setMoverAlvo(null);
+    if (!file) return;
+
+    const { vaultPath: raiz, setFiles, openConfirm } = useVaultStore.getState();
+
+    // Já está nessa pasta — nada a fazer (o seletor também desabilita a atual)
+    if (pastaDe(file.path) === pastaDestino) return;
+
+    const novoCaminho = juntarCaminho(pastaDestino, file.name);
+    const ok = await window.electron.fs.renameFile(file.path, novoCaminho);
+
+    // Mesmo padrão do renomear: colisão de nome / arquivo bloqueado não pode
+    // falhar em silêncio
+    if (!ok) {
+      await openConfirm(
+        `Não foi possível mover "${file.name}" para "${pastaDestino}". ` +
+        `Verifique se já não existe um arquivo com esse nome na pasta de destino ` +
+        `e se o arquivo não está aberto em outro programa.`
+      );
+      if (raiz) setFiles(await window.electron.fs.readDir(raiz));
+      return;
+    }
+
+    if (raiz) setFiles(await window.electron.fs.readDir(raiz));
+
+    // O arquivo movido pode ser o que está aberto: sem isto o activeFile
+    // continuaria apontando para um caminho que não existe mais
+    const { activeFile: atual, activeContent } = useVaultStore.getState();
+    if (atual === file.path) {
+      setActiveFile(novoCaminho, activeContent);
+    }
+  };
+
   const handleDelete = async () => {
     if (!contextMenu) return;
     const { file } = contextMenu;
@@ -252,8 +299,24 @@ export function FileTree() {
           }}
         >
           <div className="context-menu-item" onClick={handleRename}>✏️ Renomear</div>
+          {/* Mover é oferecido só para arquivos: mover uma PASTA para dentro de
+              si mesma é um caso de erro que não vale o risco perto da entrega */}
+          {contextMenu.file.type === 'file' && (
+            <div className="context-menu-item" onClick={handleMover}>📁 Mover para…</div>
+          )}
           <div className="context-menu-item context-menu-item--danger" onClick={handleDelete}>🗑️ Excluir</div>
         </div>
+      )}
+
+      {moverAlvo && vaultPath && (
+        <FolderPickerModal
+          titulo={`Mover "${moverAlvo.name}" para…`}
+          files={files}
+          vaultPath={vaultPath}
+          caminhoAtual={pastaDe(moverAlvo.path)}
+          onSelecionar={handleEscolherPasta}
+          onFechar={() => setMoverAlvo(null)}
+        />
       )}
     </div>
   );

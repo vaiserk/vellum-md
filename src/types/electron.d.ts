@@ -14,6 +14,14 @@ declare global {
         renameFile: (oldPath: string, newPath: string) => Promise<boolean>;
         deleteFile: (filePath: string, vaultPath?: string) => Promise<boolean>;
         restoreLastDeleted: (vaultPath: string) => Promise<boolean>;
+        listTrash: () => Promise<Array<{
+          nomeNaLixeira: string;
+          caminhoOriginal: string;
+          nome: string;
+          excluidoEm: number;
+          tamanho: number;
+        }>>;
+        restoreFromTrash: (nomeNaLixeira: string) => Promise<{ ok: boolean; erro?: string; caminho?: string }>;
         watchVault: (vaultPath: string) => Promise<boolean>;
         unwatchVault: () => Promise<boolean>;
         onVaultChanged: (callback: () => void) => () => void;

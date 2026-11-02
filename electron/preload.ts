@@ -16,6 +16,9 @@ contextBridge.exposeInMainWorld('electron', {
     renameFile: (oldPath: string, newPath: string) => ipcRenderer.invoke('fs:renameFile', oldPath, newPath),
     deleteFile: (filePath: string, vaultPath?: string) => ipcRenderer.invoke('fs:deleteFile', filePath, vaultPath),
     restoreLastDeleted: (vaultPath: string) => ipcRenderer.invoke('fs:restoreLastDeleted', vaultPath),
+    // Lixeira acessivel a qualquer momento, nao so pelo banner de Desfazer
+    listTrash: () => ipcRenderer.invoke('fs:listTrash'),
+    restoreFromTrash: (nomeNaLixeira: string) => ipcRenderer.invoke('fs:restoreFromTrash', nomeNaLixeira),
     watchVault: (vaultPath: string) => ipcRenderer.invoke('fs:watchVault', vaultPath),
     unwatchVault: () => ipcRenderer.invoke('fs:unwatchVault'),
     onVaultChanged: (callback: () => void) => {

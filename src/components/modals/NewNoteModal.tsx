@@ -4,11 +4,16 @@ import { useVaultStore } from '../../store/vault.store';
 import { useSettingsStore } from '../../store/settings.store';
 import { AIService } from '../../services/ai.service';
 import { flattenFiles } from '../../utils/files';
+import { juntarCaminho, listarPastas } from './FolderPicker';
 
 // Caracteres proibidos em nome de arquivo no Windows. Sem esta validacao,
 // "Cap 2: Metodologia" fazia o processo principal lancar e a rejeicao nao
 // tratada deixava o modal aberto sem mensagem nenhuma.
 const INVALID_NAME_RE = /[\\/:*?"<>|]/;
+
+// Espaco inquebravel: indenta as subpastas no <select> (o navegador colapsa
+// espacos normais dentro de <option>)
+const NBSP = ' ';
 
 export function NewNoteModal() {
   // useShallow: o modal fica sempre montado no App — não deve re-renderizar a cada tecla
@@ -22,6 +27,8 @@ export function NewNoteModal() {
   const apiKey = useSettingsStore(s => s.apiKey);
 
   const [noteName, setNoteName] = useState('Nova Nota');
+  // Pasta onde a nota sera criada. Vazio = raiz do vault (padrao).
+  const [pastaDestino, setPastaDestino] = useState('');
   const [aiPrompt, setAiPrompt] = useState('');
   const [error, setError] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -33,12 +40,20 @@ export function NewNoteModal() {
 
   const allFiles = useMemo(() => flattenFiles(files), [files]);
   const allTags = useMemo(() => Array.from(new Set([...tagIndex.values()].flat())).sort(), [tagIndex]);
+  // Pastas do vault (a raiz primeiro) como destino possivel
+  const pastas = useMemo(
+    () => (vaultPath ? listarPastas(files, vaultPath) : []),
+    [files, vaultPath]
+  );
   const aiAvailable = !!apiKey;
 
   useEffect(() => {
     createGenRef.current++;
     if (newNoteModalOpen) {
       setNoteName('Nova Nota');
+      // Reabrir o modal volta para a raiz — a pasta escolhida antes nao fica
+      // grudada numa criacao seguinte
+      setPastaDestino('');
       setAiPrompt('');
       setError('');
       setGenerating(false);
@@ -120,8 +135,17 @@ aliases: []
       return;
     }
     if (isDuplicate(name)) { setError(`Já existe uma nota chamada "${toFileName(name)}".`); return; }
+    // A pasta pode ter sido excluida/renomeada por fora enquanto o modal estava
+    // aberto — sem isto o <select> mostrava a raiz e a nota ia para o caminho antigo
+    if (pastaDestino && !pastas.some(p => p.caminho === pastaDestino)) {
+      setError('A pasta escolhida não existe mais. Selecione outra.');
+      setPastaDestino('');
+      return;
+    }
 
-    const filePath = `${vaultPath}/${toFileName(name)}`;
+    // pastaDestino vazio = raiz do vault. juntarCaminho respeita o separador
+    // do caminho (Windows: barra invertida)
+    const filePath = juntarCaminho(pastaDestino || vaultPath, toFileName(name));
     const generation = ++createGenRef.current;
     let content: string;
 
@@ -197,6 +221,27 @@ aliases: []
           style={{ width: '100%', marginBottom: '16px' }}
           placeholder="Nome da nota..."
         />
+
+        {/* Pasta de destino — raiz por padrao */}
+        {pastas.length > 1 && (
+          <>
+            <label style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+              Pasta
+            </label>
+            <select
+              className="destino-select"
+              value={pastaDestino}
+              onChange={e => setPastaDestino(e.target.value)}
+              style={{ marginBottom: '16px' }}
+            >
+              {pastas.map((p, i) => (
+                <option key={p.caminho} value={i === 0 ? '' : p.caminho}>
+                  {`${NBSP.repeat(p.nivel * 3)}${p.rotulo}`}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
 
         {/* AI prompt */}
         <label style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>

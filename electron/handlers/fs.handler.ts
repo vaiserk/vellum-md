@@ -210,6 +210,68 @@ export function setupFsHandlers(ipcMain: Electron.IpcMain, dialog: Electron.Dial
     }
   });
 
+  // Lista o conteúdo da lixeira, do mais recente para o mais antigo.
+  // Sem isto, a única forma de recuperar uma nota era o banner de "Desfazer",
+  // que some depois de alguns segundos — passado esse tempo, não havia como
+  // chegar ao arquivo pela interface.
+  ipcMain.handle('fs:listTrash', async () => {
+    try {
+      if (!vaultRoot) return [];
+      const trashDir = path.join(vaultRoot, '.vellum', 'trash');
+      if (!fs.existsSync(trashDir)) return [];
+      return fs.readdirSync(trashDir)
+        .map(nomeNaLixeira => {
+          const completo = path.join(trashDir, nomeNaLixeira);
+          const st = fs.statSync(completo);
+          const semCarimbo = nomeNaLixeira.match(/^\d+_(.+)$/);
+          const relativo = decodeTrashPath(semCarimbo ? semCarimbo[1] : nomeNaLixeira);
+          return {
+            nomeNaLixeira,
+            caminhoOriginal: relativo,
+            nome: path.basename(relativo),
+            excluidoEm: st.mtimeMs,
+            tamanho: st.size,
+          };
+        })
+        .sort((a, b) => b.excluidoEm - a.excluidoEm);
+    } catch (e) {
+      console.error('listTrash error:', e);
+      return [];
+    }
+  });
+
+  // Restaura UM item específico da lixeira, identificado pelo nome do arquivo
+  // lá dentro. O restoreLastDeleted sempre pegava o mais recente, então se
+  // outra exclusão acontecesse no intervalo, voltava a nota errada.
+  ipcMain.handle('fs:restoreFromTrash', async (_, nomeNaLixeira: string) => {
+    try {
+      if (!vaultRoot) return { ok: false, erro: 'Nenhum vault aberto.' };
+      // O nome vem da interface: não pode conter separador de diretório
+      if (typeof nomeNaLixeira !== 'string' || /[\\/]/.test(nomeNaLixeira)) {
+        return { ok: false, erro: 'Nome invalido.' };
+      }
+      const trashDir = path.join(vaultRoot, '.vellum', 'trash');
+      const origem = path.join(trashDir, nomeNaLixeira);
+      if (!fs.existsSync(origem)) return { ok: false, erro: 'O item nao esta mais na lixeira.' };
+
+      const semCarimbo = nomeNaLixeira.match(/^\d+_(.+)$/);
+      const relativo = decodeTrashPath(semCarimbo ? semCarimbo[1] : nomeNaLixeira);
+      // O nome decodificado vira caminho: precisa ser validado contra ".."
+      const destino = assertInVault(path.join(vaultRoot, relativo));
+
+      if (fs.existsSync(destino)) {
+        return { ok: false, erro: `Ja existe uma nota em "${relativo}".` };
+      }
+      const pastaDestino = path.dirname(destino);
+      if (!fs.existsSync(pastaDestino)) fs.mkdirSync(pastaDestino, { recursive: true });
+      fs.renameSync(origem, destino);
+      return { ok: true, caminho: destino };
+    } catch (e: any) {
+      console.error('restoreFromTrash error:', e);
+      return { ok: false, erro: e?.message ?? 'Falha ao restaurar.' };
+    }
+  });
+
   ipcMain.handle('fs:restoreLastDeleted', async (_, _vaultPath: string) => {
     try {
       if (!vaultRoot) return false;

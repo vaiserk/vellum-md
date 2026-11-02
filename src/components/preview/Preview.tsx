@@ -99,9 +99,26 @@ function CustomPre({ children, ...props }: any) {
   );
 }
 
+// O estado de falha guarda QUAL url falhou, e não um booleano.
+// Antes era `useState(false)`: o closeBrackets fecha o parêntese assim que a
+// pessoa digita `![](`, então o markdown já é uma imagem válida de src vazio e
+// o onError marcava "quebrada" antes de a URL existir. Como o React reaproveita
+// a mesma instância do componente quando só o src muda, esse `true` nunca mais
+// voltava — a imagem externa só aparecia ao reabrir a nota (remontagem), que é
+// exatamente o sintoma relatado. Comparando a url que falhou com a url atual, a
+// imagem se recupera sozinha no instante em que o endereço fica completo.
 function CustomImg({ src, alt, ...props }: any) {
-  const [broken, setBroken] = React.useState(false);
-  if (broken) {
+  const [urlQueFalhou, setUrlQueFalhou] = React.useState<string | null>(null);
+  const url = typeof src === 'string' ? src.trim() : '';
+
+  // src vazio (parêntese recém-fechado) ou esquema pela metade: a pessoa ainda
+  // está digitando. Não renderiza <img> nenhum — evita um pedido de rede inútil
+  // e evita o aviso de "não encontrada" piscando a cada tecla.
+  if (!url || /^(h|ht|htt|http|https|https?:|https?:\/|https?:\/\/)$/i.test(url)) {
+    return null;
+  }
+
+  if (urlQueFalhou === url) {
     return (
       <span style={{
         display: 'inline-flex', alignItems: 'center', gap: '6px',
@@ -110,14 +127,14 @@ function CustomImg({ src, alt, ...props }: any) {
         color: 'var(--text-secondary)', margin: '1em 0',
       }}>
         <span aria-hidden>🖼️</span>
-        <span>Imagem não encontrada: {alt || src}</span>
+        <span>Imagem não encontrada: {alt || url}</span>
       </span>
     );
   }
   return (
-    <img {...props} src={src} alt={alt}
+    <img {...props} src={url} alt={alt}
       style={{ maxWidth: '100%', borderRadius: '8px', margin: '1em 0', display: 'block' }}
-      onError={() => setBroken(true)} />
+      onError={() => setUrlQueFalhou(url)} />
   );
 }
 
