@@ -167,7 +167,11 @@ Quatro rodadas, e a ordem entre elas **não é arbitrária**:
 | **A** | Sem chave de API | As capturas **A44**, **A45** e o índice vazio **deixam de existir** depois de configurar a chave. Começar pela IA perde a evidência de que o app funciona sem ela — justamente o que o RNF07 promete |
 | **B** | Com chave configurada | Indexação, busca semântica e IA |
 | **C** | Exportação | Precisa de uma nota rica, já pronta das rodadas A e B |
-| **D** | App instalado | Na máquina de teste, com o instalador |
+| **D** | App instalado | Não alimenta nenhuma outra, por isso vai no fim da lista — mas acontece **amanhã**, no trabalho. Só D01 e D02 exigem a instalação; as demais saem no `win-unpacked` |
+
+> A ordem acima é de **dependência**, não de calendário. Na prática: amanhã
+> saem **D01 e D02** (instalador e ícone), e as rodadas A, B e C acontecem em
+> casa, no `release\win-unpacked\VellumMD.exe`, na ordem em que estão aqui.
 
 ★ = **evidência primária de um requisito**. São 55 das 85 entradas, e esse
 conjunto sozinho já cobre **todos os 28 RF e todos os RNF** da matriz da seção 5
@@ -357,14 +361,24 @@ saída prove que **tudo** sobreviveu à conversão.
 
 Feita com o instalador, seguindo [`TESTE-EM-OUTRA-MAQUINA.md`](../TESTE-EM-OUTRA-MAQUINA.md).
 
+> ⏰ **É a última na lista, mas a primeira no calendário.** As rodadas estão
+> ordenadas por dependência: A alimenta B, que alimenta C. A rodada D não
+> alimenta nenhuma, por isso ficou no fim — mas acontece **amanhã, no trabalho**,
+> junto do teste do instalador. É a única ocasião barata de fotografar o
+> aplicativo instalado.
+>
+> Só **duas** destas capturas exigem de fato a instalação: **D01** e **D02**.
+> As outras cinco saem igual no `win-unpacked`, em casa, junto das rodadas A–C.
+> Se amanhã o tempo for curto, **tire D01 e D02 e deixe o resto para depois**.
+
 | ID | Título sugerido da figura | Como chegar | Precisa aparecer no quadro | RF |
 |---|---|---|---|---|
-| ★D01 | Instalador da aplicação | Executar o `Setup` | Tela do instalador | RNF03 |
-| D02 | Ícone e atalho da aplicação no Windows | Área de trabalho / menu Iniciar | Atalho com o ícone próprio | RNF03 |
-| D03 | Menu da aplicação | Barra de menus | Arquivo, Editar, Exibir, Janela, Ajuda — em português | RNF09 |
-| ★D04 | Manual de ajuda embutido | `F1` | Janela do manual com a navegação lateral | RNF09 |
-| D05 | Identificação da versão | Ajuda → Sobre o VellumMD | Diálogo com o número da versão | — |
-| ★D06 | Operação sem conexão com a internet | Desligar o Wi-Fi e usar o app | App editando e renderizando normalmente, com o Wi-Fi visivelmente desligado | RNF07 |
+| ★D01 | Instalador da aplicação | Executar o `Setup` — **só amanhã** | Tela do instalador | RNF03 |
+| D02 | Ícone e atalho da aplicação no Windows | Área de trabalho / menu Iniciar — **só amanhã** | Atalho com o ícone próprio | RNF03 |
+| D03 | Menu da aplicação | Barra de menus (qualquer build) | Arquivo, Editar, Exibir, Janela, Ajuda — em português | RNF09 |
+| ★D04 | Manual de ajuda embutido | `F1` (qualquer build) | Janela do manual com a navegação lateral | RNF09 |
+| D05 | Identificação da versão | Ajuda → Sobre o VellumMD (qualquer build) | Diálogo com o número da versão | — |
+| ★D06 | Operação sem conexão com a internet | Desligar o Wi-Fi e usar o app (qualquer build) | App editando e renderizando normalmente, com o Wi-Fi visivelmente desligado | RNF07 |
 | D07 | Tela de recuperação de erro *(oportunista)* | Difícil de provocar de propósito | Se acontecer durante os testes, **fotografe** | RNF06 |
 
 > **D06** merece encenação: deixe o ícone de rede do Windows visível na captura,
