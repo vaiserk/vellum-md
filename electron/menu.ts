@@ -132,12 +132,12 @@ export function montarMenu() {
               title: 'Sobre o VellumMD',
               message: `VellumMD ${app.getVersion()}`,
               detail:
-                'Editor de Markdown local-first com busca semantica e assistencia por IA.\n\n' +
-                'Suas notas ficam em arquivos .md na pasta que voce escolher. ' +
-                'Nada e enviado a servidores, exceto as chamadas de IA que voce ' +
+                'Editor de Markdown local-first com busca semântica e assistência por IA.\n\n' +
+                'Suas notas ficam em arquivos .md na pasta que você escolher. ' +
+                'Nada é enviado a servidores, exceto as chamadas de IA que você ' +
                 'configurar explicitamente.\n\n' +
-                'Trabalho de Conclusao de Curso\n' +
-                'Otavio Freitas dos Santos',
+                'Trabalho de Conclusão de Curso\n' +
+                'Otávio Freitas dos Santos',
               buttons: ['Fechar'],
             });
           },
