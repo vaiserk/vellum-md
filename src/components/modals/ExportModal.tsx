@@ -12,7 +12,7 @@ import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeStringify from 'rehype-stringify';
 import { visit } from 'unist-util-visit';
-import { parseWikilink, slugifyAnchor } from '../../utils/wikilink';
+import { remarkWikilinksExport } from '../../utils/remark-wikilinks-export';
 import { rehypeHeadingIds } from '../../utils/rehype-heading-ids';
 import { SlideEditorModal } from './SlideEditorModal';
 
@@ -42,53 +42,6 @@ function remarkCallouts() {
         children: [{ type: 'text', value: `${icons[type] || 'ℹ️'} ${titleText}` }]
       });
     });
-  };
-}
-
-// ─── Wikilink → anchor plugin (site export only) ─────────────────────────────
-function makeWikilinkPlugin(slugMap: Record<string, string>) {
-  return function remarkWikilinkLinks() {
-    return (tree: any) => {
-      visit(tree, 'text', (node: any, index: any, parent: any) => {
-        if (!parent || !node.value) return;
-        const regex = /\[\[([^\]]+)\]\]/g;
-        const matches = [...node.value.matchAll(regex)];
-        if (!matches.length) return;
-        const children: any[] = [];
-        let lastIndex = 0;
-        for (const match of matches) {
-          if (match.index > lastIndex) {
-            children.push({ type: 'text', value: node.value.slice(lastIndex, match.index) });
-          }
-          // `[[Nota#Seção|rótulo]]`: o arquivo é "Nota"; a seção vira âncora do
-          // HTML e o rótulo, o texto do link. Antes o miolo inteiro era
-          // procurado no mapa de slugs, não era encontrado, e o link saía do
-          // site exportado como texto cru entre colchetes.
-          const { target, anchor, label } = parseWikilink(match[1]);
-          const slug = slugMap[target.toLowerCase()];
-          if (slug) {
-            children.push({
-              type: 'element',
-              data: {
-                hName: 'a',
-                hProperties: {
-                  href: `${slug}.html${anchor ? `#${slugifyAnchor(anchor)}` : ''}`,
-                  className: 'wiki-link',
-                },
-              },
-              children: [{ type: 'text', value: label }],
-            });
-          } else {
-            children.push({ type: 'text', value: match[0] });
-          }
-          lastIndex = match.index + match[0].length;
-        }
-        if (lastIndex < node.value.length) {
-          children.push({ type: 'text', value: node.value.slice(lastIndex) });
-        }
-        parent.children.splice(index, 1, ...children);
-      });
-    };
   };
 }
 
@@ -157,7 +110,10 @@ export function ExportModal({ onClose }: { onClose: () => void }) {
     setExporting(true);
     setResult(null);
     try {
-      const htmlContent = await mdToHtml(activeContent);
+      // Sem mapa de slugs: o PDF é um documento único, não há página de destino.
+      // O wikilink então vira o rótulo em texto — antes os colchetes duplos
+      // eram impressos literalmente no PDF.
+      const htmlContent = await mdToHtml(activeContent, remarkWikilinksExport());
       // O nome da nota vira o nome sugerido no diálogo de salvamento, e o
       // caminho dela permite resolver imagens com caminho relativo.
       const noteTitle = activeFile?.split(/[\\/]/).pop()?.replace(/\.md$/, '') || 'nota';
@@ -230,7 +186,7 @@ export function ExportModal({ onClose }: { onClose: () => void }) {
         if (!(key in slugMap)) slugMap[key] = slug;
         return slug;
       });
-      const wikilinkPlugin = makeWikilinkPlugin(slugMap);
+      const wikilinkPlugin = remarkWikilinksExport(slugMap);
 
       const pages: Array<{ title: string; slug: string; html: string; dir: string }> = [];
       for (let i = 0; i < mdFiles.length; i++) {
