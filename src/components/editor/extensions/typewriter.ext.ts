@@ -23,19 +23,28 @@ const typewriterScrollPlugin = ViewPlugin.fromClass(
   class {
     update(update: any) {
       if (!update.state.field(typewriterState)) return;
-      if (update.docChanged || update.selectionSet) {
-        const view = update.view as EditorView;
-        const head = view.state.selection.main.head;
-        const coords = view.coordsAtPos(head);
-        if (coords) {
-          const editorRect = view.dom.getBoundingClientRect();
-          const centerY = editorRect.top + editorRect.height / 2;
-          const diff = coords.top - centerY;
-          if (Math.abs(diff) > 10) {
-            view.scrollDOM.scrollBy({ top: diff, behavior: 'smooth' });
-          }
-        }
-      }
+      if (!update.docChanged && !update.selectionSet) return;
+
+      const view = update.view as EditorView;
+
+      // Ler a posição do cursor na tela DURANTE a atualização é proibido pelo
+      // CodeMirror ("Reading the editor layout isn't allowed during an
+      // update"). A versão anterior fazia exatamente isso: o plugin lançava,
+      // o CodeMirror o desativava, e a centralização parava de funcionar sem
+      // aviso nenhum. requestMeasure adia a leitura para a fase de medição e
+      // separa a escrita, que é onde a rolagem pode acontecer.
+      view.requestMeasure({
+        read: () => {
+          const coords = view.coordsAtPos(view.state.selection.main.head);
+          if (!coords) return null;
+          const area = view.dom.getBoundingClientRect();
+          return coords.top - (area.top + area.height / 2);
+        },
+        write: (distancia: number | null) => {
+          if (distancia === null || Math.abs(distancia) <= 10) return;
+          view.scrollDOM.scrollBy({ top: distancia, behavior: 'smooth' });
+        },
+      });
     }
   }
 );
@@ -54,8 +63,18 @@ const typewriterDimPlugin = ViewPlugin.fromClass(
     }
     build(view: EditorView): DecorationSet {
       if (!view.state.field(typewriterState)) return Decoration.none;
-      // Just add a class to the editor — CSS handles the dimming
-      return Decoration.none;
+
+      // O CSS escurece `.cm-line` e devolve opacidade a `.cm-activeLine`. Essa
+      // classe, porém, só existe se a extensão highlightActiveLine estiver
+      // ligada — e não está. Sem ela, nada era marcado e o modo foco escurecia
+      // o texto inteiro por igual, sem destacar coisa alguma.
+      //
+      // Marcar aqui, em vez de ligar highlightActiveLine globalmente, mantém o
+      // editor idêntico quando o modo foco está desligado.
+      const linha = view.state.doc.lineAt(view.state.selection.main.head);
+      return Decoration.set([
+        Decoration.line({ class: 'cm-activeLine' }).range(linha.from),
+      ]);
     }
   },
   { decorations: (v) => v.decorations }
