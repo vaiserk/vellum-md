@@ -12,5 +12,9 @@ release/
 *.pdf
 *.crdownload
 
-# Banner do TCC (arquivos grandes: pptx, capturas, vault de demonstracao)
-docs/banner/
+# Material do TCC: capitulos, banner, canvas, precificacao, pitch, roteiros de
+# captura e o vault de demonstracao. E material academico e de negocio do autor,
+# nao documentacao do software, e este repositorio e publico. A regra cobre a
+# pasta inteira de proposito: assim um arquivo novo do TCC largado aqui nao vai
+# parar no GitHub por esquecimento.
+docs/
