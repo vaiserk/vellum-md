@@ -29,9 +29,12 @@ export const MODEL_RATE_LIMITS: Record<string, ModelRateLimit> = {
   'gemma-3n-e2b-it':    { rpm: 30, tpm: 15_000,  rpd: null },
 
   // ── Gemini (referência) ──────────────────────────────────────────────────
-  'gemini-2.5-flash':      { rpm: 10,  tpm: 250_000,   rpd: 500  },
-  'gemini-2.5-flash-lite': { rpm: 15,  tpm: 250_000,   rpd: 1500 },
-  'gemini-2.0-flash':      { rpm: 15,  tpm: 1_000_000, rpd: 1500 },
+  // A linha 2.x saiu: gemini-2.0-flash foi desligado em 01/06/2026 e a 2.5
+  // entrou em depreciação. Modelos fora desta tabela caem no DEFAULT_RATE_LIMIT,
+  // que é conservador — nada quebra se o Google publicar um id novo.
+  'gemini-flash-latest':   { rpm: 10,  tpm: 250_000,   rpd: 500  },
+  'gemini-3.5-flash':      { rpm: 10,  tpm: 250_000,   rpd: 500  },
+  'gemini-3.5-flash-lite': { rpm: 15,  tpm: 250_000,   rpd: 1500 },
 
   // ── Embedding (Google) — valores do AI Studio free tier ─────────────────
   'gemini-embedding-001': { rpm: 100, tpm: 30_000, rpd: 1_000 },

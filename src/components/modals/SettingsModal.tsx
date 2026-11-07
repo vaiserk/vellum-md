@@ -17,6 +17,9 @@ export function SettingsModal() {
   const provider = settings.getProvider();
   const providers = settings.getAvailableProviders();
   const isGemmaProvider = settings.aiProvider === 'gemma';
+  // Gemma e Gemini usam a mesma chave do AI Studio e a mesma rota de listagem,
+  // então os dois podem descobrir os modelos que a conta realmente tem.
+  const isGoogleProvider = isGemmaProvider || settings.aiProvider === 'gemini';
 
   // Modelos descobertos — persistidos no store
   const discoveredModels = settings.discoveredAiModels[settings.aiProvider] ?? [];
@@ -71,7 +74,13 @@ export function SettingsModal() {
     setTimeout(() => setTestStatus('idle'), 3000);
   };
 
-  // Busca os IDs exatos de modelos Gemma disponíveis na conta Google AI
+  // Busca na conta Google AI os IDs exatos de modelos da família do provedor.
+  //
+  // Antes isto valia só para Gemma, e o Gemini ficava preso a uma lista escrita
+  // à mão no código. Quando o Google aposenta um modelo — como fez com o
+  // gemini-2.0-flash — a lista continua oferecendo o id morto e a assistência
+  // simplesmente para de responder. Perguntar à conta é a única fonte que não
+  // envelhece.
   const handleDiscoverModels = async () => {
     setDiscovering(true);
     setDiscoverError('');
@@ -82,14 +91,20 @@ export function SettingsModal() {
       setDiscovering(false);
       return;
     }
+    const familia = settings.aiProvider === 'gemma' ? 'gemma' : 'gemini';
     try {
       const all = await AIService.listGoogleModels(key);
-      const gemmaModels = all.filter(m => m.id.toLowerCase().includes('gemma'));
-      if (gemmaModels.length === 0) {
-        setDiscoverError('Nenhum modelo Gemma encontrado na sua conta. Verifique o acesso em aistudio.google.com.');
+      const encontrados = all.filter(m => {
+        const id = m.id.toLowerCase();
+        if (!id.includes(familia)) return false;
+        // Modelos de embedding e de imagem não servem para conversar.
+        return !id.includes('embedding') && !id.includes('-image');
+      });
+      if (encontrados.length === 0) {
+        setDiscoverError(`Nenhum modelo ${familia} encontrado na sua conta. Verifique o acesso em aistudio.google.com.`);
       } else {
-        settings.setDiscoveredAiModels(settings.aiProvider, gemmaModels);
-        settings.setAiModel(gemmaModels[0].id);
+        settings.setDiscoveredAiModels(settings.aiProvider, encontrados);
+        settings.setAiModel(encontrados[0].id);
       }
     } catch (e: any) {
       setDiscoverError(`${e.message ?? 'Erro ao buscar modelos.'} — Verifique se a chave é do Google AI Studio.`);
@@ -146,7 +161,7 @@ export function SettingsModal() {
             </div>
 
             <div className="settings-row">
-              <label>Auto-save delay</label>
+              <label>Intervalo de salvamento</label>
               <div className="settings-control">
                 <input
                   type="range" min="200" max="2000" step="100" value={settings.autoSaveDelay}
@@ -192,12 +207,15 @@ export function SettingsModal() {
 
             <div className="settings-row">
               <label>Modelo</label>
-              <div className="settings-control" style={{ flex: 1, flexDirection: 'column', alignItems: 'stretch', gap: '4px' }}>
-                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+              <div className="settings-control" style={{ flex: 1, minWidth: 0, flexDirection: 'column', alignItems: 'stretch', gap: '4px' }}>
                   <select
                     value={settings.aiModel}
                     onChange={e => settings.setAiModel(e.target.value)}
-                    style={{ flex: 1 }}
+                    // minWidth: 0 deixa o select encolher. Sem isso ele assume a
+                    // largura do nome de modelo mais longo da lista — com os 29
+                    // descobertos na conta, a linha estourava os 520px do
+                    // diálogo e empurrava os rótulos para fora da tela.
+                    style={{ flex: 1, minWidth: 0, width: '100%' }}
                   >
                     {/* Modelos descobertos via API têm prioridade */}
                     {discoveredModels.length > 0
@@ -209,29 +227,29 @@ export function SettingsModal() {
                         ))
                     }
                   </select>
-                  {/* Botão "Descobrir modelos" — aparece apenas para provedor Gemma */}
-                  {isGemmaProvider && (
+                  {/* Botão abaixo do select, e não ao lado: dividindo a linha,
+                      o nome do modelo era cortado no meio ("gemini-3."). */}
+                  {isGoogleProvider && (
                     <button
                       onClick={handleDiscoverModels}
                       disabled={discovering}
                       title="Buscar modelos disponíveis na sua conta Google AI"
-                      style={{ fontSize: '11px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+                      style={{ fontSize: '11px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', alignSelf: 'flex-end' }}
                     >
                       <RefreshCw size={12} style={{ animation: discovering ? 'spin 1s linear infinite' : 'none' }} />
                       {discovering ? 'Buscando...' : 'Descobrir modelos'}
                     </button>
                   )}
-                </div>
                 {/* Feedback de erro ou modelos encontrados */}
-                {isGemmaProvider && discoverError && (
+                {isGoogleProvider && discoverError && (
                   <span style={{ fontSize: '11px', color: 'var(--error-color)' }}>{discoverError}</span>
                 )}
-                {isGemmaProvider && discoveredModels.length > 0 && (
+                {isGoogleProvider && discoveredModels.length > 0 && (
                   <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                    ✓ {discoveredModels.length} modelo(s) Gemma encontrado(s) na sua conta.
+                    ✓ {discoveredModels.length} modelo(s) encontrado(s) na sua conta.
                   </span>
                 )}
-                {isGemmaProvider && discoveredModels.length === 0 && !discoverError && (
+                {isGoogleProvider && discoveredModels.length === 0 && !discoverError && (
                   <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                     Clique em "Descobrir modelos" para buscar os IDs exatos disponíveis na sua conta.
                   </span>

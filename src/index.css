@@ -635,6 +635,11 @@ button.settings-close:hover {
   padding: 4px 8px;
   font-size: 12px;
   font-family: inherit;
+  /* O diálogo tem largura fixa. Um select cresce até caber a maior opção, e
+     nomes de modelo descobertos na API passam fácil dos 400px — o que empurrava
+     os rótulos para fora e criava rolagem horizontal. */
+  min-width: 0;
+  max-width: 100%;
 }
 .settings-row input[type="checkbox"] {
   accent-color: var(--accent);
@@ -643,6 +648,12 @@ button.settings-close:hover {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* Permite que o conteúdo encolha em vez de alargar a linha (ver nota em
+     .settings-row select). */
+  min-width: 0;
+}
+.settings-row label {
+  flex-shrink: 0;
 }
 .settings-control span {
   font-size: 11px;

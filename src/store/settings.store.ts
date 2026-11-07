@@ -31,8 +31,18 @@ const providers: Record<string, AIProvider> = {
   gemini: {
     name: 'Gemini (Google)',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    defaultModel: 'gemini-2.5-flash',
-    availableModels: ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite'],
+    // A linha 2.x foi aposentada: gemini-2.0-flash foi desligado em 01/06/2026
+    // e a 2.5 entrou em depreciação. Pedir um modelo desligado devolve 404 e a
+    // assistência inteira para de responder, sem pista na interface.
+    //
+    // Esta lista é só o ponto de partida: o botão "Descobrir modelos" pergunta
+    // à conta do usuário quais existem de fato, e é nele que se deve confiar
+    // quando o Google mudar de novo.
+    // O padrão é o apelido `-latest`: ele acompanha o Flash vigente e não
+    // envelhece quando o Google troca de versão, que é a falha que tirou a
+    // assistência do ar com a lista anterior.
+    defaultModel: 'gemini-flash-latest',
+    availableModels: ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'],
   },
   // Gemma via Google AI native API (generateContent) — mesma chave do AI Studio / Gemini.
   gemma: {
@@ -192,12 +202,26 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'vellum-settings',
-      version: 1,
+      version: 2,
       // Migra configurações persistidas de versões anteriores:
       // - provedor de embedding 'gemma' foi removido (Gemma não suporta embedContent)
       // - modelo 'gemini-embedding-2-preview' não existe na API (causava 404 em toda indexação)
+      // - modelos Gemini da linha 2.x foram aposentados pelo Google (v2)
       migrate: (persisted: any) => {
         const state = { ...(persisted ?? {}) };
+
+        // Um modelo desligado fica gravado nas configurações e só se manifesta
+        // como falha na hora de usar a IA. Quem escolheu gemini-2.0-flash ou
+        // gemini-2.5-* passa a usar o padrão atual, a menos que o id tenha sido
+        // descoberto pela API da própria conta — aí ele existe de verdade.
+        if (state.aiProvider === 'gemini' && typeof state.aiModel === 'string') {
+          const aposentado = /^gemini-2\.(0|5)/.test(state.aiModel);
+          const descobertos: { id: string }[] = state.discoveredAiModels?.gemini ?? [];
+          if (aposentado && !descobertos.some(m => m.id === state.aiModel)) {
+            state.aiModel = providers.gemini.defaultModel;
+          }
+        }
+
         const validModels = embeddingProviders.google.availableModels;
         if (state.embeddingProvider !== 'google' && state.embeddingProvider !== 'openai') {
           state.embeddingProvider = 'google';
