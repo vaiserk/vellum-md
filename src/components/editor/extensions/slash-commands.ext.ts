@@ -1,8 +1,9 @@
-import { 
+import {
   autocompletion,
   CompletionContext,
   CompletionResult
 } from '@codemirror/autocomplete';
+import { wikilinkCompletion } from './wikilink-complete.ext';
 
 interface SlashCommand {
   label: string;
@@ -54,7 +55,10 @@ function slashCommandCompletion(context: CompletionContext): CompletionResult | 
   };
 }
 
+// Uma única instância de autocompletion para o editor: `override` substitui
+// TODAS as fontes, então as duas precisam estar na mesma lista. Registrar um
+// segundo autocompletion() faria a segunda configuração ser ignorada.
 export const slashCommandsExtension = autocompletion({
-  override: [slashCommandCompletion],
+  override: [slashCommandCompletion, wikilinkCompletion],
   activateOnTyping: true,
 });
