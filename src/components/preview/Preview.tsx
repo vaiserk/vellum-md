@@ -21,11 +21,11 @@ import { useShallow } from 'zustand/react/shallow';
 import { useVaultStore } from '../../store/vault.store';
 import { visit } from 'unist-util-visit';
 import { buildKnownNotes } from '../../utils/files';
-import { slugifyAnchor } from '../../utils/wikilink';
 import { remarkWikilinks } from '../../utils/remark-wikilinks';
 import { rehypeHeadingIds } from '../../utils/rehype-heading-ids';
 import { resolveAssetUrl } from '../../utils/asset-url';
 import { useDebouncedValue } from '../../utils/useDebouncedValue';
+import { useAncoraDeSecao } from './useAncoraDeSecao';
 // Loader lazy compartilhado com a extensão inline do editor — mesma instância
 // e mesma fila de renderização (o Mermaid é singleton; ver utils/mermaid-loader.ts)
 import { enqueueMermaidRender } from '../../utils/mermaid-loader';
@@ -210,49 +210,23 @@ export function Preview() {
   const syncSourceRef = useRef<'editor' | 'preview' | null>(null);
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // ── Âncora de seção (`[[Nota#Seção]]`) ──────────────────────────────────────
-  // O clique no wikilink só PEDE a abertura da nota; quem abre é o tratador do
-  // evento, de forma assíncrona. Rolar na hora levaria à seção da nota ANTIGA,
-  // que ainda está na tela. Por isso a âncora fica pendente, junto do nome da
-  // nota esperada, e só é consumida quando essa nota é de fato a ativa.
-  const [ancoraPendente, setAncoraPendente] = useState<{ nota: string; ancora: string } | null>(null);
+  // Salto de âncora em curso. Enquanto está ligado, a rolagem do editor não
+  // arrasta a pré-visualização: a nota acabou de abrir e o editor ainda está no
+  // topo, então o sincronizador mapearia esse topo por cima do salto — era o
+  // que devolvia o painel para a posição 0,8 de 335.
+  const saltoRef = useRef(false);
+  const saltoTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
-  useEffect(() => {
-    const aoAbrirNota = (e: any) => {
-      const ancora = e.detail?.anchor;
-      if (ancora) setAncoraPendente({ nota: (e.detail?.name || '').trim(), ancora });
-    };
-    window.addEventListener('vellum:open-note', aoAbrirNota);
-    return () => window.removeEventListener('vellum:open-note', aoAbrirNota);
+  const prepararSalto = useCallback(() => {
+    saltoRef.current = true;
+    clearTimeout(saltoTimeoutRef.current);
+    // Janela larga o bastante para cobrir a montagem do editor da nota nova,
+    // que é quem emite as rolagens tardias.
+    saltoTimeoutRef.current = setTimeout(() => { saltoRef.current = false; }, 600);
   }, []);
 
-  useEffect(() => {
-    if (!ancoraPendente) return;
-
-    const notaAtual = (activeFile?.split(/[/\\]/).pop() ?? '').replace(/\.md$/i, '');
-    // Sem nome => âncora da própria nota (`[[#Seção]]`), rola já.
-    const chegou = !ancoraPendente.nota
-      || notaAtual.toLowerCase() === ancoraPendente.nota.toLowerCase();
-
-    if (!chegou) {
-      // A nota pode nunca abrir (não existe, ou o usuário recusou criá-la).
-      // Sem este descarte, a âncora ficaria guardada e dispararia numa
-      // navegação futura, sem relação nenhuma com o clique.
-      const desistir = setTimeout(() => setAncoraPendente(null), 3000);
-      return () => clearTimeout(desistir);
-    }
-
-    const id = requestAnimationFrame(() => {
-      const slug = slugifyAnchor(ancoraPendente.ancora);
-      if (slug) {
-        previewRef.current
-          ?.querySelector(`#${CSS.escape(slug)}`)
-          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-      setAncoraPendente(null);
-    });
-    return () => cancelAnimationFrame(id);
-  }, [ancoraPendente, previewContent, activeFile]);
+  // Âncora de seção (`[[Nota#Seção]]`) — ver useAncoraDeSecao.
+  useAncoraDeSecao(previewRef, activeFile, previewContent, prepararSalto);
 
   // Scroll sync: editor.scrollDOM ↔ .preview-pane (parentElement of previewRef)
   useEffect(() => {
@@ -261,6 +235,9 @@ export function Preview() {
     if (!sc) return;
 
     const onEditorScroll = () => {
+      // Durante um salto de âncora o editor está no topo da nota recém-aberta.
+      // Deixá-lo comandar aqui apagaria o salto.
+      if (saltoRef.current) return;
       if (syncSourceRef.current === 'preview') return;
       syncSourceRef.current = 'editor';
       clearTimeout(syncTimeoutRef.current);
